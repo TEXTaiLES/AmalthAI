@@ -163,4 +163,4 @@ http://0.0.0.0:5000
 
 ## Documentation
 
-Additional documentation can be found on the documentation portal [here](https://textailes.github.io/amalthai-documentation/).
+Additional documentation can be found on the documentation portal [here](https://textailes.github.io/AmalthAI-documentation/).
