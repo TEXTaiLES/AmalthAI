@@ -1,0 +1,5 @@
+id,name,url
+ResNet18,ResNet18,https://arxiv.org/abs/1512.03385
+EfficientNetB0,EfficientNetB0,https://arxiv.org/abs/1905.11946
+MobileNetV2,MobileNetV2,https://arxiv.org/abs/1801.04381
+ShuffleNetV2,ShuffleNetV2,https://arxiv.org/abs/1807.11164

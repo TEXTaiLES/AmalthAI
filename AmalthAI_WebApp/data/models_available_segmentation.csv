@@ -1,0 +1,5 @@
+id,name,url
+UNetlight,UNetlight,https://arxiv.org/abs/1505.04597
+UNet,UNet,https://arxiv.org/abs/1505.04597
+Deeplabv3plus,DeeplabV3+,https://arxiv.org/abs/1802.02611
+PSPNet,PSPNet,https://arxiv.org/abs/1612.01105
