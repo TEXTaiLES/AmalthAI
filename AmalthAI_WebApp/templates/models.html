@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Models{% endblock %}
+
+{% block content %}
+
+<div class="container my-5">
+    <!-- Header -->
+    {% set header_text= "Models for " ~ mode|capitalize %}
+    {% include 'partials/mode_header.html' %}
+    
+    <!-- Body -->
+    <div class="row">
+        <div class="table-responsive mb-4">
+            <table id="models" class="table table-striped mt-2">
+                <thead>
+                    <tr>
+                        <th class="sortable" data-type="string" onclick="sortTable('models', 0)">Model Name</th>
+                        <th class="sortable" data-type="string" onclick="sortTable('models', 1)">Trained on</th>
+                        <th class="sortable" data-type="number" onclick="sortTable('models', 2)">Score</th>
+                        <th class="sortable" data-type="date" onclick="sortTable('models', 3)">Creation date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for model in models %}
+                    <tr>
+                        <td>
+                            <a href="{{url_for('inference', id=model.id, mode=mode)}}">
+                            {{ model.name }}
+                            </a>
+                        </td>
+                        <td>{{ model.trained_on }}</td>
+                        <td><span class="badge bg-success bg-opacity-75">{{ model.score }}</span></td>
+                        <td>{{ model.date }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

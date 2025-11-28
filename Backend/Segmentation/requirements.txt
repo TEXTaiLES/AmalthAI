@@ -1,0 +1,7 @@
+#torch==1.1.0          
+#torchvision==0.3.0
+tqdm==4.32.2
+tensorboard==2.14.0
+Pillow==10.4.0
+opencv-python==4.1.2.30
+scikit-image==0.21.0

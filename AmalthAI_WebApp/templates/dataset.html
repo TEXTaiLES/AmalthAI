@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}Dataset - {{dataset_info.name}}{% endblock %}
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="container my-5">
+
+        <!-- Main body -->
+        <div class="row">
+            <!-- LEFT COLUMN (Collection description) -->
+            <div class="col-lg-4 col-md-5 col-12 mb-4">
+                <div class="p-4 rounded shadow-sm bg-secondary-subtle">
+                    <h3 class="text-cetner mb-4">{{dataset_info.name }}</h3>
+                    <table class="table table-borderless rounded">
+                        <tbody>
+                            <tr>
+                                <th class="text-capitalize" style="width: 30%">Dataset Name</th>
+                                <td>{{dataset_info.name }}</td>
+                            </tr>
+                            <tr>
+                                <th class="text-capitalize" style="width: 30%">Number of Items</th>
+                                <td>{{dataset_info.num_items }}</td>
+                            </tr>
+                            <tr>
+                                <th class="text-capitalize" style="width: 30%">Creation Date</th>
+                                <td>{{dataset_info.date }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- RIGHT COLUMN (Collection items) -->
+            <div class="col-lg-8 col-md-7 col-12">
+                <!-- Pager -->
+                {% include 'partials/pager.html' %}
+
+                <!-- Item List -->
+                <div class="table-responsive mb-4">
+
+                    <table class="table table-striped">
+                        {% if mode == 'classification' %}
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Image</th>
+                                <th>Class</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in dataset_items %}
+                            <tr>
+                                <td>
+                                    <button type="button" class="btn btn-link p-0" data-bs-toggle="modal" data-bs-target="#modal-{{ loop.index }}">
+                                        {{ item.get('image')
+                                        | replace(dataset_path_cls ~ dataset_info.name ~ '/', '')
+                                        | replace('.jpg', '') }}
+                                    </button>
+                                    
+                                    <!-- Modal -->
+                                    <div class="modal fade" id="modal-{{ loop.index }}" tabindex="-1" aria-labelledby="modalLabel-{{ loop.index }}" aria-hidden="true">
+                                        <div class="modal-dialog modal-lg modal-dialog-centered">
+                                            <div class="modal-content">
+                                                <div class="modal-header">
+                                                    <h5 class="modal-title" id="modalLabel-{{ loop.index }}">
+                                                        {{ item.get('image') }}
+                                                    </h5>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                </div>
+                                                <div class="modal-body d-flex justify-content-around">
+                                                    <img src="{{ item.get('image') }}" alt="input image" class="img-fluid me-2" style="max-height: 400px;">
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <a href="{{ item.get('image') }}" download class="btn btn-primary">Download</a>
+                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Back</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <img src="{{ item.get('image') }}" alt="image" class="img-thumbnail" style="max-height: 200px;">
+                                </td>
+                                <td>
+                                    <pre style="margin:0; white-space:pre-wrap;">{{ item.get('class') }}</pre>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        {% else %}
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Image</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in dataset_items %}
+                            <tr>
+                                <td>
+                                    <button type="button" class="btn btn-link p-0" data-bs-toggle="modal" data-bs-target="#modal-{{ loop.index }}">
+                                        {{ item.get('image') 
+                                        | replace(dataset_path_seg ~ dataset_info.name ~ '/images/train/', '')
+                                        | replace(dataset_path_det ~ dataset_info.name ~ '/train/images/', '')}}
+                                    </button>
+                                    
+                                    <!-- Modal -->
+                                    <div class="modal fade" id="modal-{{ loop.index }}" tabindex="-1" aria-labelledby="modalLabel-{{ loop.index }}" aria-hidden="true">
+                                        <div class="modal-dialog modal-lg modal-dialog-centered">
+                                            <div class="modal-content">
+                                                <div class="modal-header">
+                                                    <h5 class="modal-title" id="modalLabel-{{ loop.index }}">
+                                                        {{ item.get('image') }}
+                                                    </h5>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                </div>
+                                                <div class="modal-body d-flex justify-content-around">
+                                                    <img src="{{ item.get('image') }}" alt="input image" class="img-fluid me-2" style="max-height: 400px;">
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <a href="{{ item.get('image') }}" download class="btn btn-primary">Download</a>
+                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Back</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <img src="{{ item.get('image') }}" alt="image" class="img-thumbnail" style="max-height: 200px;">
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        {% endif %}
+                    </table>
+                </div>
+                {% include 'partials/pager.html' %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

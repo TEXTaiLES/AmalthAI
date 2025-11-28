@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}Collections{% endblock %}
+
+{% block content %}
+
+<div class="container my-5">
+    <!-- Header -->
+    {% set header_text= "Collections for " ~ mode|capitalize %}
+    {% include 'partials/mode_header.html' %}
+    
+    <!-- Add model button -->
+    <div class="row mb-3">
+        <div class="col text-start">
+            <a href="{{ url_for('add_dataset', mode=mode) }}" class="btn btn-success">
+                <i class="bi bi-plus"></i>
+                Add a new {{ mode }} dataset
+            </a>
+        </div>
+    </div>
+
+    <!-- Body -->
+    <div class="row">
+        <div class="table-responsive mb-4">
+            <table id="datasets" class="table table-striped mt-2">
+                <thead>
+                    <tr>
+                        <th class="sortable" data-type="string" onclick="sortTable('datasets', 0)">Collection Name</th>
+                        <th class="sortable" data-type="string" onclick="sortTable('datasets', 1)">Type of Data</th>
+                        <th class="sortable" data-type="number" onclick="sortTable('datasets', 2)">Number of Samples</th>
+                        <th class="sortable" data-type="date" onclick="sortTable('datasets', 3)">Creation date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for dataset in datasets %}
+                    <tr>
+                        <td>
+                            <a href="{{url_for('dataset', id=dataset.name, mode=mode)}}">
+                            {{ dataset.name }}
+                            </a>
+                        </td>
+                        <td>{{ dataset.type }}</td>
+                        <td>{{ dataset.num_samples }}</td>
+                        <td>{{ dataset.date }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

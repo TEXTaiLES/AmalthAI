@@ -1,0 +1,30 @@
+<!-- Header -->
+<div class="row">
+    <!-- Left content -->
+    <div class="col-lg-8 d-flex flex-column justify-content-start">
+        <h2 class="mb-3">{{ header_text }}</h2>
+    </div>
+    <!-- Right content -->
+    <div class="col-lg-4">
+        <!-- Mode buttons -->
+        <div class="d-flex justify-content-between mb-2">
+            <a href="{{ url_for(request.endpoint, mode='segmentation', **request.view_args) }}"
+                class="btn btn-outline-primary flex-fill me-2
+                {% if mode == 'segmentation' %}active{% endif %}">
+                Segmentation
+            </a>
+
+            <a href="{{ url_for(request.endpoint, mode='classification', **request.view_args) }}"
+                class="btn btn-outline-primary flex-fill me-2
+                {% if mode == 'classification' %}active{% endif %}">
+                Classification
+            </a>
+
+            <a href="{{ url_for(request.endpoint, mode='detection', **request.view_args) }}"
+                class="btn btn-outline-primary flex-fill
+                {% if mode == 'detection' %}active{% endif %}">
+                Detection
+            </a>
+        </div>
+    </div>
+</div>

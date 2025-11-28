@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}New dataset{% endblock %}
+{% block content %}
+
+<div class="container my-5">
+    <!-- Header -->
+    {% set header_text= "Add new " ~ mode ~ " dataset" %}
+    {% include 'partials/mode_header.html' %}
+
+    <form method="POST" action="{{ url_for('dataset_submit') }}" enctype="multipart/form-data" id="add-dataset-form">
+        <!-- Body -->
+        <div class="row">
+            <!-- Left content -->
+            <div class="col-lg-8 d-flex flex-column justify-content-start">
+                <p class="mb-4">
+                    <!-- Add Text -->
+                    {% if mode == "classification" %}
+                    {% elif mode == "segmentation" %}
+                    {% elif mode == "detection" %}
+                    {% endif %}
+                </p>
+
+                <!-- Zip Upload area -->
+                <div class="mb-4">
+                    <input type="file" id="datasetZipInput" name="dataset_zip" class="visually-hidden" accept=".zip">
+
+                    <input type="hidden" id="datasetZipFilename" name="dataset_zip">
+                    <label for="datasetZipInput"
+                           class="d-flex flex-column align-items-center justify-content-center border border-secondary rounded bg-light p-5 text-center"
+                           style="cursor: pointer;">
+                        <i class="bi bi-upload display-1 mb-3"></i>
+                        <div class="h5 mb-1">Upload dataset (.zip)</div>
+                        <div class="small text-muted">Click to select a .zip file</div>
+                    </label>
+                    <!-- Loader during async upload -->
+                    <div id="zipUploadLoader" style="display:none;" class="mt-3 text-center">
+                        <div class="spinner-border text-success" role="status" aria-hidden="true"></div>
+                        <span class="small mt-2">Uploading...</span>
+                    </div>
+                    <!-- Status message -->
+                    <div id="zipUploadStatus" class="small mt-2"></div>
+                </div>
+                
+                <!-- Submit button (disabled until valid & upload complete) -->
+                <button id="submitBtn" type="submit" class="btn btn-success" disabled>
+                    Submit dataset
+                    <i class="bi bi-check2-circle"></i>
+                </button>
+            </div>
+
+            <!-- Right content -->
+            <input type="hidden" id="mode" name="mode" value="{{ mode }}">
+            <div class="col-lg-4">
+                {% if mode == "classification" %} 
+                <div class="card">
+                    <div class="card-body">
+                        <!-- Number of Classes -->
+                        <div class="mb-3">
+                            <label class="form-label">Number of classes</label>
+                            <div class="row g-2 align-items-center">
+                                <div class="col">
+                                    <input
+                                        type="number"
+                                        class="form-control"
+                                        id="numClassesInput"
+                                        name="num_classes"
+                                        min="{{ num_classes.min }}"
+                                        max="{{ num_classes.max }}"
+                                        step="1"
+                                        value="{{ num_classes.default }}">
+                                </div>
+                            </div>
+                            <div class="form-text">
+                                Range: {{ num_classes.min }} - {{ num_classes.max }}
+                            </div>
+                            <div class="invalid-feedback d-none mt-1" id="num_classes_error">
+                                Invalid number of classes
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </form>
+</div>
+
+<script src="{{ url_for('static', filename='js/num_class_validation.js') }}"></script>
+{% endblock %}

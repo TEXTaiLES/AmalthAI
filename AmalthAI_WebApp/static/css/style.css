@@ -1,0 +1,176 @@
+/* layout variables */
+:root {
+    --site-footer-height: 64px;
+    --navbar-height: 56px;
+}
+
+/* ensure main leaves space for fixed footer and becomes a flex container */
+main.flex-grow-1 {
+    padding-bottom: var(--site-footer-height);
+    display: flex;
+    flex-direction: column;
+}
+
+/* Hero / background */
+.hero-wrapper {
+    background-image: var(--hero-bg, url('../media/background.jpg'));
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    flex: 1 1 auto;
+    min-height: 0; 
+    position: relative;
+}
+
+/* overlay now provides the 50% opacity "faded" look for the background */
+.hero-overlay {
+    background-color: rgba(255, 255, 255, 0.5);
+}
+
+/* Ensure the footer is fixed to the bottom of the viewport */
+.site-footer {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1030;
+    height: var(--site-footer-height);
+    display: flex;
+    align-items: center;
+}
+
+/* centered content */
+.hero-content {
+    min-height: calc(100vh - 120px);
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding-left: 1rem;
+    padding-right: 1rem;
+}
+
+/* typography */
+.hero-title {
+    color: #1a1a2e;
+    letter-spacing: -0.5px;
+}
+
+.hero-subtitle {
+    max-width: 600px;
+}
+
+/* dropdown sizing */
+.dropdown-card {
+    width: 16rem;
+}
+
+/* gradient buttons base */
+.btn-gradient {
+    border: none;
+    color: white;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    border-radius: 12px;
+}
+
+/* variants */
+.btn-a { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+.btn-b { background: linear-gradient(135deg, #e690de 0%, #ff5f74 100%); }
+.btn-c { background: linear-gradient(135deg, #83a1e0 0%, #40dba8 100%); }
+
+/* dropdown menu custom */
+.dropdown-menu-custom {
+    border-radius: 12px;
+    padding: 0.5rem;
+    border: 0;
+}
+
+/* dropdown items */
+.dropdown-item-custom {
+    transition: all 0.2s ease;
+}
+
+/* hover effects */
+.btn-gradient:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2) !important;
+}
+
+.dropdown-item-custom:hover {
+    background-color: #f8f9fa !important;
+    transform: translateX(4px);
+}
+
+/* sortable headers: pointer, space for arrow and arrow drawing via ::after */
+th.sortable {
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+    padding-right: 1.75rem; /* make room for the arrow */
+    transition: color .12s ease;
+}
+
+/* show a triangular arrow only when aria-sort is present on the header */
+th.sortable[aria-sort]::after {
+    content: "";
+    position: absolute;
+    right: 0.6rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+}
+
+/* ascending -> small up-triangle */
+th.sortable[aria-sort="ascending"]::after {
+    border-bottom: 8px solid #0d6efd; /* use Bootstrap primary color */
+}
+
+/* descending -> small down-triangle */
+th.sortable[aria-sort="descending"]::after {
+    border-top: 8px solid #0d6efd;
+}
+
+/* subtle underline for active sorted header */
+th.sortable[aria-sort] {
+    text-decoration: underline;
+}
+
+/* small responsive adjustments */
+@media (max-width: 576px) {
+    .dropdown-card { width: 100%; max-width: 340px; }
+    .hero-subtitle { padding-left: 1rem; padding-right: 1rem; }
+}
+
+/* Ensure table collapse looks smooth */
+#tableCollapse {
+    transition: all 0.3s ease;
+}
+
+/* Modern button spacing */
+.btn-outline-primary {
+    border-radius: 0.5rem;
+}
+
+/* Card styling */
+.card {
+    border-radius: 0.75rem;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+}
+
+/* Responsive adjustments */
+@media (max-width: 991px) {
+    .col-lg-8, .col-lg-4 {
+        margin-bottom: 2rem;
+    }
+}
+
+.advanced-param h6 {
+    margin-bottom: 0.5rem;
+}

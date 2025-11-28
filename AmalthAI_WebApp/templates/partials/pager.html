@@ -1,0 +1,68 @@
+<div class="d-flex flex-column flex-sm-row flex-wrap justify-content-end align-items-center gap-2 mb-3">
+    
+    <!-- First page -->
+    <a class="btn btn-outline-primary me-1 
+        {% if page <= 1 %} disabled {% endif %}"
+        href="?id={{ dataset_info.name }}&mode={{ mode }}&page={{ 1 }}&pager_size={{ pager_size }}">
+        <i class="bi bi-chevron-double-left"></i>
+    </a>
+    <!-- Previous page -->
+    <a class="btn btn-outline-primary me-1
+        {% if page <= 1 %} disabled {% endif %}"
+        href="?id={{ dataset_info.name }}&mode={{ mode }}&page={{ page - 1 }}&pager_size={{ pager_size }}">
+        <i class="bi bi-chevron-left"></i>
+    </a>
+    <!-- Direct selection -->
+    {% for p in range(page-2, page+3) %}
+        {% if p >= 1 and p <= num_pages %}
+            {% if p == page %}
+                <span class="btn btn-primary me-1 disabled">
+                    {{ p }}
+                </span>
+            {% else %}
+                <a class="btn btn-outline-primary me-1"
+                href="?id={{ dataset_info.name }}&mode={{ mode }}&page={{ p }}&pager_size={{ pager_size }}">
+                    {{ p }}
+                </a>
+            {% endif %}
+        {% endif %}
+    {% endfor %}
+    {% if page != num_pages %}
+    {% endif %}
+
+    <!-- Next page -->
+    <a class="btn btn-outline-primary me-1 
+    {% if page >= num_pages %} disabled {% endif %}"
+    href="?id={{ dataset_info.name }}&mode={{ mode }}&page={{ page + 1 }}&pager_size={{ pager_size }}">
+    <i class="bi bi-chevron-right"></i>
+    </a>
+    <!-- Last page -->
+    <a class="btn btn-outline-primary me-1 
+    {% if page >= num_pages %} disabled {% endif %}"
+    href="?id={{ dataset_info.name }}&mode={{ mode }}&page={{ num_pages }}&pager_size={{ pager_size }}">
+    <i class="bi bi-chevron-double-right"></i>
+    </a>
+
+    <!-- Pager size -->
+    <div class="dropdown">
+        <button class="btn btn-outline-secondary dropdown-toggle"
+            type="button"
+            id="itemsPerPageDropdown"
+            data-bs-toggle="dropdown"
+            aria-expanded="false">
+            Items per page: {{ pager_size }}
+        </button>
+    
+        <ul class="dropdown-menu dropdown-menu-end">
+            {% for option in pager_size_options %}
+            <li>
+                <a class="dropdown-item
+                {% if option == pager_size %} active {% endif %}"
+                href="?id={{dataset_info.name}}&mode={{ mode }}&page=1&pager_size={{ option }}">
+                {{ option }} 
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>

@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!-- favicon -->
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+
+    <!-- Bootstrap 5 CDN -->
+    <link 
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+    rel="stylesheet">
+
+    <!-- Bootstrap icons CDN -->
+    <link rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+
+    <!-- Add custom styles -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+    <title>{% block title %}My App{% endblock %}</title>
+</head>
+
+<body class="d-flex flex-column min-vh-100">
+    <!-- ───────────── HEADER / NAVBAR ───────────── -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container-fluid">
+
+            <!-- LEFT: Brand -->
+            <a class="navbar-brand d-flex align-items-center" href="/">
+                <img src="{{ url_for('static', filename='media/AmalthAI-Logo.png') }}"  
+                    alt="Home" height="40" class="me-2">
+            </a>
+
+            <!-- RIGHT: Toggler -->
+            <button class="navbar-toggler" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#navbarContent">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <!-- COLLAPSIBLE NAV -->
+            <div class="collapse navbar-collapse" id="navbarContent">
+                <ul class="navbar-nav ms-2 d-flex gap-3">
+
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('collections') }}">Collections</a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('train_model') }}">Train</a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('models') }}">Models</a>
+                    </li>
+                    
+                </ul>
+            </div>
+        </div>
+    </nav>
+    
+    <!-- ───────────── MAIN CONTENT ───────────── -->
+    <main class="flex-grow-1">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            <div class="container">
+                {% for category, message in messages %}
+                <div class="collapse show mb-0" id="flash-{{ loop.index }}">
+                    <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show mt-3 mb-0"
+                        role="alert">
+                        {{ message }}
+                        <button type="button"
+                                class="btn-close"
+                                data-bs-dismiss="alert"
+                                data-bs-target="#flash-{{ loop.index }}"
+                                aria-label="Close"></button>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+    </main>
+
+
+    <!-- ───────────── FOOTER ───────────── -->
+    <footer class="site-footer bg-dark text-light py-3">
+        <div class="container">
+
+            <div class="d-flex justify-content-between align-items-center">
+
+                <!-- LEFT SECTION -->
+                <div class="d-flex align-items-center gap-3">
+
+                    <a href="https://textailes-eccch.eu/" class="text-light text-decoration-none">
+                        <img src="{{ url_for('static', filename='media/textailes-logo.svg') }}" 
+                            alt="TEXTaiLES" height="28" class="me-2">
+                    </a>
+                </div>
+
+                <!-- RIGHT SECTION -->
+                <div class="d-flex align-items-center gap-3">
+
+                    <!-- Info Icon -->
+                    <a href="https://github.com/TEXTaiLES/AmalthAI-Documentation" class="text-light text-decoration-none">
+                        <i class="bi bi-info-circle fs-4"></i>
+                    </a>
+
+                    <!-- GitHub Icon -->
+                    <a href="https://github.com/TEXTaiLES/AmalthAI" class="text-light text-decoration-none">
+                        <i class="bi bi-github fs-4"></i>
+                    </a>
+
+                    <!-- Copyright -->
+                    <span class="small text-light">
+                        © 2025 TEXTaiLES
+                    </span>
+                </div>
+
+            </div>
+
+        </div>
+    </footer>
+
+
+    <!-- Bootstrap JS -->
+    <script 
+        src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js">
+    </script>
+
+    {% block scripts %}
+        <script src="{{url_for('static', filename='js/sortTable.js')}}"></script>
+    {% endblock %}
+</body>
+</html>

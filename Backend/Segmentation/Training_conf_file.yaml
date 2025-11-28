@@ -1,0 +1,89 @@
+apiVersion: kubeflow.org/v1beta1
+kind: Experiment
+metadata:
+  name: random-experiment
+  namespace: kubeflow-user-example-com  # Ensure this matches your Kubeflow namespace
+  annotations:
+    katib.kubeflow.org/metrics-collector-injection: enabled  # Enable metrics collection
+spec:
+  objective:
+    type: maximize
+    goal: 0.4
+    objectiveMetricName: meaniou
+  algorithm:
+    algorithmName: random
+  parallelTrialCount: 1
+  maxTrialCount: 1
+  maxFailedTrialCount: 1
+  parameters:
+    - name: learning-rate
+      parameterType: double
+      feasibleSpace:
+        min: "0.01"
+        max: "0.1"
+    - name: batch-size
+      parameterType: int
+      feasibleSpace:
+        min: "2"
+        max: "3"
+    - name: epochs
+      parameterType: int
+      feasibleSpace:
+        min: "1"
+        max: "2"
+  trialTemplate:
+    primaryContainerName: training-container
+    trialParameters:
+      - name: learningRate
+        description: Learning rate for the training job
+        reference: learning-rate
+      - name: batchSize
+        description: Batch size for the training job
+        reference: batch-size
+      - name: numEpochs
+        description: Number of training epochs
+        reference: epochs
+    trialSpec:
+      apiVersion: batch/v1
+      kind: Job
+      spec:
+        template:
+          metadata:
+            annotations:
+              sidecar.istio.io/inject: "false"  # Disable Istio
+          spec:
+            containers:
+              - name: training-container
+                image: segmentation-utils:v1
+                imagePullPolicy: IfNotPresent
+                command:
+                  - "python"
+                  - "-u"
+                  - "/segmentation/train.py"
+                  - "--config"
+                  - "/segmentation/config.json"
+                  - "--lr"
+                  - "${trialParameters.learningRate}"
+                  - "--bs"
+                  - "${trialParameters.batchSize}"
+                  - "--epochs"
+                  - "${trialParameters.numEpochs}"
+                  - --localpath
+                  - add_the_timestamp
+                  - --dataset 
+                  - /segmentation/dataset_path
+                volumeMounts:
+                  - mountPath: /dev/shm
+                    name: shm
+                  - mountPath: /segmentation  # Ensure the training job writes metrics to this path
+                    name: segmentation
+            volumes:
+              - name: shm
+                emptyDir:
+                  medium: Memory
+                  sizeLimit: 32Gi
+              - name: segmentation
+                hostPath:
+                  path: /host/Segmentation  # Ensure this directory exists on your node
+                  type: Directory
+            restartPolicy: OnFailure

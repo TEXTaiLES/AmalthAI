@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}AmalthAI{% endblock %}
+
+{% block content %}
+
+<!-- Full viewport wrapper -->
+<div class="hero-wrapper position-relative w-100"
+     style="--hero-bg: url('{{ url_for('static', filename=background_image) if background_image is defined else url_for('static', filename='media/background.png') }}');">
+
+    <!-- Gradient overlay for better readability -->
+    <div class="position-absolute top-0 start-0 w-100 h-100 hero-overlay"></div>
+
+    <!-- Centered content -->
+    <div class="d-flex flex-column justify-content-center align-items-center text-center px-3 hero-content">
+        
+        <!-- Main text -->
+        <h1 class="display-5 fw-bold mb-2 hero-title"
+        style="background: linear-gradient(90deg,#135185 0%,#427dd4 50%,#0dd2ec 100%);
+                -webkit-background-clip: text;
+                background-clip: text;
+                -webkit-text-fill-color: transparent;
+                color: transparent;">
+            <img 
+                src="{{ url_for('static', filename='media/AmalthAI-Logo.png') }}"
+                class="img-fluid mb-4"
+                alt="AmalthAI Logo"
+                style="max-width: 100px;">
+            AmalthAI
+        </h1>
+        <p class="lead text-muted mb-5 hero-subtitle">
+            Train and infer models for cultural heritage tasks
+        </p>
+
+        <!-- Dropdown buttons row -->
+        <div class="d-flex gap-4 flex-wrap justify-content-center mb-4">
+
+            <!-- Collections -->
+            <div class="dropdown dropdown-card">
+                <a 
+                    class="btn btn-lg w-100 shadow-sm btn-gradient btn-a" 
+                    href="{{ url_for('collections') }}"
+                    type="button">
+                    View Collections
+                </a>
+            </div>
+
+            <!-- Train -->
+            <div class="dropdown dropdown-card">
+                <button class="btn btn-lg w-100 dropdown-toggle shadow-sm btn-gradient btn-b" 
+                        type="button" 
+                        data-bs-toggle="dropdown" 
+                        aria-expanded="false">
+                    Train a Model
+                </button>
+                <ul class="dropdown-menu w-100 shadow-lg border-0 dropdown-menu-custom">
+                    <li><a class="dropdown-item rounded-2 py-2 px-3 dropdown-item-custom" href="{{url_for('train_model', mode='classification')}}">Classification</a></li>
+                    <li><a class="dropdown-item rounded-2 py-2 px-3 dropdown-item-custom" href="{{url_for('train_model', mode='segmentation')}}">Segmentation</a></li>
+                    <li><a class="dropdown-item rounded-2 py-2 px-3 dropdown-item-custom" href="{{url_for('train_model', mode='detection')}}">Detection</a></li>
+                </ul>
+            </div>
+
+            <!-- Models -->
+            <div class="dropdown dropdown-card">
+                <a class="btn btn-lg w-100 shadow-sm btn-gradient btn-c" 
+                        href="{{ url_for('models') }}"
+                        type="button"> 
+                    Infer a Model
+                </a>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+{% endblock %}

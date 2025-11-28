@@ -1,0 +1,20 @@
+/** Loader spinning wheel styles. */
+
+/* Spinner taken from https://css-loaders.com/spinner/ (#1). */
+.loader {
+  width: 50px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 8px solid;
+  border-color: #000 #0000;
+  animation: l1 1s infinite;
+}
+@keyframes l1 {to{transform: rotate(.5turn)}}
+
+/* Overrides. */
+.loader {
+  width: 25px;
+  border-color: #066aab #0000;
+  display: none;
+  vertical-align: middle;
+}

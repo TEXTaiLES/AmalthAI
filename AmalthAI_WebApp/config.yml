@@ -1,0 +1,36 @@
+paths:
+  base_host_path: /data
+  base_dataset_path: /data/Datasets
+  seg_inference_path: /static/media/for_inference/segmentation
+  det_inference_path: /static/media/for_inference/detection
+  cls_inference_path: /static/media/for_inference/classification
+
+containers:
+  segmentation: segm_cls_inference_container
+  classification: segm_cls_inference_container
+  detection: yolo
+
+defaults:
+  pager_size: 30
+  lr_lower: 0.001
+  lr_upper: 0.1
+  bs_lower: 1
+  bs_upper: 2
+  ep_lower: 1
+  ep_upper: 2
+
+  cls_blur: true
+  cls_rotate: true
+  cls_flip: true
+
+  seg_blur: true
+  seg_scale: true
+  seg_rotate: true
+  seg_flip: true
+
+  det_hue: 0.015
+  det_sat: 0.6
+  det_val: 0.4
+  det_flip: 0.4
+  det_rotate: 0.0
+
