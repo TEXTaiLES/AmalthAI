@@ -1,4 +1,4 @@
-# AmalthAI Documentation Portal
+# AmalthAI Machine Learning Platform
 
 <p align="center">
     <a href = "https://github.com/TEXTaiLES/AmalthAI" target="_blank">
