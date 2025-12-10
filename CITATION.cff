@@ -1,0 +1,27 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: AmalthAI Machine Learning Platform
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - name: Athena Research Center
+    email: info@textailes-eccch.eu
+repository-code: 'https://github.com/TEXTaiLES/AmalthAI'
+abstract: >-
+  AmalthAI is a machine learning platform developed as part
+  of the TEXTaiLES toolbox which offers end-to-end
+  interaction with the whole machine learning project
+  pipeline using an intuitive interface.
+keywords:
+  - machine-learning
+  - machine-learning-operations
+  - object-detection
+  - semantic-segmentation
+  - classification
+version: 0.1.0
+date-released: '2025-11-28'
+
