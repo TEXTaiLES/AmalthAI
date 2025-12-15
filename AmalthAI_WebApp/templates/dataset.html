@@ -9,7 +9,7 @@
             <!-- LEFT COLUMN (Collection description) -->
             <div class="col-lg-4 col-md-5 col-12 mb-4">
                 <div class="p-4 rounded shadow-sm bg-secondary-subtle">
-                    <h3 class="text-cetner mb-4">{{dataset_info.name }}</h3>
+                    <h3 class="text-center mb-4">Dataset Information</h3>
                     <table class="table table-borderless rounded">
                         <tbody>
                             <tr>
@@ -19,6 +19,14 @@
                             <tr>
                                 <th class="text-capitalize" style="width: 30%">Number of Items</th>
                                 <td>{{dataset_info.num_items }}</td>
+                            </tr>
+                             <tr>
+                                <th class="text-capitalize" style="width: 30%">Type of Data</th>
+                                <td>2D Images</td>
+                            </tr>
+                            <tr>
+                                <th class="text-capitalize" style="width: 30%">Images Resolution</th>
+                                <td>{{ dataset_info.max_width }} × {{ dataset_info.max_height }}</td>
                             </tr>
                             <tr>
                                 <th class="text-capitalize" style="width: 30%">Creation Date</th>

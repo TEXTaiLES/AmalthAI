@@ -41,6 +41,8 @@
 
             <!-- COLLAPSIBLE NAV -->
             <div class="collapse navbar-collapse" id="navbarContent">
+
+                <!-- LEFT MENU -->
                 <ul class="navbar-nav ms-2 d-flex gap-3">
 
                     <li class="nav-item">
@@ -54,8 +56,39 @@
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('models') }}">Models</a>
                     </li>
-                    
+
                 </ul>
+
+                <!-- RIGHT MENU (pushed right) -->
+                <ul class="navbar-nav ms-auto">
+
+                    <!-- USER DROPDOWN -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle d-flex align-items-center"
+                            href="#" id="userDropdown" role="button"
+                            data-bs-toggle="dropdown" aria-expanded="false">
+
+                            <!-- Avatar -->
+                            <img src="{{ url_for('static', filename='media/avatar.png') }}"
+                                alt="avatar"
+                                class="rounded-circle me-2"
+                                style="width:32px; height:32px; object-fit:cover;">
+
+                            <!-- Username -->
+                            <span>{{ current_user.full_name }}</span>
+                        </a>
+
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+                            <li>
+                                <a class="dropdown-item" href="{{ url_for('logout') }}">
+                                    <i class="bi bi-box-arrow-right me-2"></i> Logout
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+
+                </ul>
+
             </div>
         </div>
     </nav>
@@ -104,7 +137,7 @@
                 <div class="d-flex align-items-center gap-3">
 
                     <!-- Info Icon -->
-                    <a href="https://github.com/TEXTaiLES/AmalthAI-Documentation" class="text-light text-decoration-none">
+                    <a href="https://textailes.github.io/AmalthAI-documentation/" class="text-light text-decoration-none">
                         <i class="bi bi-info-circle fs-4"></i>
                     </a>
 
@@ -115,7 +148,7 @@
 
                     <!-- Copyright -->
                     <span class="small text-light">
-                        © 2025 TEXTaiLES
+                        © 2025 TEXTaiLES Project
                     </span>
                 </div>
 

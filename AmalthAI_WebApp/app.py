@@ -10,11 +10,11 @@ from datetime import datetime
 import shutil
 from utils.models_page import write_results
 from utils.file_management import remove_unnecessary_files
-from utils.helpers import *
+from utils.helpers import load_datasets, load_models_available, load_dataset_info, get_max_image_size, load_models
 from utils.load_config import load_config
 import docker
-from utils.containers import container_autostart
 import zipfile
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 
 
 client = docker.from_env()
@@ -23,14 +23,57 @@ app = Flask(__name__)
 app.secret_key = 'supersecret'
 app.config.from_file('config.toml', load=tomllib.load, text=False)
 
+# Login requirements
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = "login"
+
+# Dummy user
+class User(UserMixin):
+    id = 1
+    username = "user"
+    password = "1234"  
+    full_name = "Guest User"
+
+user_instance = User()
+
+@login_manager.user_loader
+def load_user(user_id):
+    if str(user_id) == "1":
+        return user_instance
+    return None
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        username = request.form.get("username")
+        password = request.form.get("password")
+
+        if username == user_instance.username and password == user_instance.password:
+            login_user(user_instance)
+            return redirect(url_for("index"))
+
+        flash("Wrong Credentials.")
+
+    return render_template("login.html")
+
+@app.route("/logout")
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for("login"))
+
+# App configurations
+
 # Yaml config
 config = load_config("config.yml")
 
 BASE_HOST_PATH      = config.get("paths").get("base_host_path")
+BASE_HOST_PATH_OUT      = config.get("paths").get("base_host_path_out")
 BASE_DATASET_PATH   = config.get("paths").get("base_dataset_path")
 BASE_INFERENCE_PATH = config.get("paths").get("base_inference_path")
-CONTAINER_SEGM_CLS  = config.get("containers").get("classification")
-CONTAINER_OD        = config.get("containers").get("detection")
+IMAGE_SEGM_CLS  = config.get("images").get("classification")
+IMAGE_OD        = config.get("images").get("detection")
 
 
 @app.route(f'/{BASE_DATASET_PATH}/<path:filename>')
@@ -55,15 +98,14 @@ def data_files(filename):
 
 
 @app.route('/')
+@login_required
 def index():
-    # Αuto start the needed containers for inference
-    container_autostart(client, [CONTAINER_SEGM_CLS, CONTAINER_OD])
-
     return render_template('index.html', is_homepage=True)
 
 
 
 @app.route('/dataset')
+@login_required
 def dataset():
     # Page Logic
     name       = request.args.get('id')
@@ -90,6 +132,10 @@ def dataset():
         mode     = mode
     )
 
+    max_w, max_h = get_max_image_size(dataset_items)
+    dataset_info["max_width"]  = max_w
+    dataset_info["max_height"] = max_h
+
     pager_size_options = [15, 30, 50, 80, 120]
     # Don't overload the page
     visible_items = dataset_items[pager_size*(page-1):pager_size*page-1]
@@ -113,6 +159,7 @@ def dataset():
 
 # Datasets page showing all available datasets with metadata
 @app.route('/collections')
+@login_required
 def collections():
     # Dataset logic
     seg_datasets = load_datasets(f"{BASE_DATASET_PATH}/Segmentation", "Seg")
@@ -124,7 +171,7 @@ def collections():
         for d in datasets:
             folder_path = os.path.join(base_path, d["id"])
             creation_timestamp = os.path.getctime(folder_path)
-            creation_date = datetime.fromtimestamp(creation_timestamp).strftime("%Y-%m-%d") # fixes the format to be the same with inference page format
+            creation_date = datetime.fromtimestamp(creation_timestamp).strftime("%d/%m/%Y") # fixes the format to be the same with inference page format
             enriched.append({
                 "name": d["name"],
                 "num_samples": d["num_samples"],
@@ -163,6 +210,7 @@ def collections():
 
 
 @app.route('/add_dataset')
+@login_required
 def add_dataset():
     num_classes = {
         "default": 2,
@@ -184,6 +232,7 @@ def add_dataset():
 
 
 @app.route('/upload_dataset_zip', methods=['POST'])
+@login_required
 def upload_dataset_zip():
 
     file = request.files.get('dataset_zip')
@@ -350,6 +399,7 @@ def process_dataset(mode, zip_path, num_classes=None):
 
 
 @app.route('/dataset_submit', methods=["POST"])
+@login_required
 def dataset_submit():
     mode        = request.form.get('mode')
     num_classes = request.form.get('num_classes')
@@ -370,6 +420,7 @@ def dataset_submit():
     return redirect(url_for("collections", mode=mode, msg=msg, msg_type="info"))
 
 @app.route('/train_model', methods=['GET'])
+@login_required
 def train_model():
     # Models
     seg_models = load_models_available('data/models_available_segmentation.csv')
@@ -521,6 +572,7 @@ def train_model():
 
 # Page for the trained models
 @app.route('/models')
+@login_required
 def models():
     seg_models = load_models('data/trained_models_db_segm.csv')
     od_models  = load_models('data/trained_models_db_od.csv')
@@ -550,6 +602,7 @@ def models():
 
 
 @app.route('/train_model_submit', methods=["POST"])
+@login_required
 def train_model_submit():
     mode = request.form.get('mode')
 
@@ -708,6 +761,7 @@ def train_model_submit():
 
 
 @app.route('/inference', methods=['GET', 'POST'])
+@login_required
 def inference():
     model_id = int(request.args.get("id"))
     mode     = request.args.get("mode")
@@ -765,43 +819,30 @@ def inference():
                         filepath = os.path.join(save_dir, filename)
                         file.save(filepath)
                 
+                # Temporary container creation
+                container = client.containers.run(
+                    IMAGE_SEGM_CLS,
+                    command="sleep infinity",
+                    detach=True,
+                    volumes={BASE_HOST_PATH_OUT: {"bind": "/data", "mode": "rw"}}
+                )
                 try:
-                    container = client.containers.get(CONTAINER_SEGM_CLS)
-                    if container.status != "running":
-                        error_msg = f"Container '{CONTAINER_SEGM_CLS}' is not running"
-                        flash(error_msg, "warning")
-                        return render_template(
-                            'inference.html',
-                            mode         = mode,
-                            model        = model,
-                            results      = results,
-                            metric_label = metric,
-                        )
-                except docker.errors.NotFound:
-                    error_msg = f"Container '{CONTAINER_SEGM_CLS}' does not exist ! Ensure that you provide the correct name."
-                    flash(error_msg, "danger")
-                    return render_template(
-                        'inference.html',
-                        mode         = mode,
-                        model        = model,
-                        results      = results,
-                        metric_label = metric,
-                    )
-                
-                # Run inference once for all images
-                client.containers.get(CONTAINER_SEGM_CLS).exec_run([
-                "python", "/data/Segmentation/inference_cvat.py",
-                "-c", config_path,
-                "-m", checkpoint_path,
-                "-i", f"/data/Segmentation/for_inference/{model_id}/",
-                "-o", f"/data/Segmentation/inference_outputs/{model_id}/",
-                ])
+                    container.exec_run([
+                        "python", "/data/Segmentation/inference_cvat.py",
+                        "-c", config_path,
+                        "-m", checkpoint_path,
+                        "-i", f"/data/Segmentation/for_inference/{model_id}/",
+                        "-o", f"/data/Segmentation/inference_outputs/{model_id}/"
+                    ])
 
-                client.containers.get(CONTAINER_SEGM_CLS).exec_run([
-                    "chown", "-R", "1000:1000", f"/data/Segmentation/inference_outputs/"
-                ])
+                    container.exec_run([
+                        "chown", "-R", "1000:1000", "/data/Segmentation/inference_outputs/"
+                    ])
 
-                
+                finally:
+                    container.stop()
+                    container.remove()
+
                 timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
                 static_input_dir  = f"static/media/for_inference/segmentation/{model_id}/{timestamp}"
                 static_output_dir = f"static/media/outputs/segmentation/{model_id}/{timestamp}"
@@ -880,40 +921,31 @@ def inference():
                         filepath = os.path.join(save_dir, filename)
                         file.save(filepath)
 
+                # Temporary container creation
+                container = client.containers.run(
+                    IMAGE_OD,             
+                    command="sleep infinity",
+                    detach=True,
+                    volumes={BASE_HOST_PATH_OUT: {"bind": "/data", "mode": "rw"}}
+                )
+
                 try:
-                    container = client.containers.get(CONTAINER_OD)
-                    if container.status != "running":
-                        error_msg = f"Container '{CONTAINER_OD}' is not running"
-                        flash(error_msg, "warning")
-                        return render_template(
-                            'inference.html',
-                            mode         = mode,
-                            model        = model,
-                            results      = results,
-                            metric_label = metric,
-                        )
-                except docker.errors.NotFound:
-                    error_msg = f"Container '{CONTAINER_OD}' does not exist ! Ensure that you provide the correct name."
-                    flash(error_msg, "danger")
-                    return render_template(
-                        'inference.html',
-                        mode         = mode,
-                        model        = model,
-                        results      = results,
-                        metric_label = metric,
-                    )
-                
-                # Run inference once for the entire folder
-                client.containers.get(CONTAINER_OD).exec_run([
-                "python", "/data/ultralytics/inference_v1.py",
-                "--checkpoint", checkpoint_path,
-                "--input", f"/data/for_inference_od/od{model_id}/",
-                "--output", f"/data/outputs/{model_id}/",
-                ])
-                
-                client.containers.get(CONTAINER_OD).exec_run([
-                    "chown", "-R", "1000:1000", f"/data/"
-                ])
+                    # Run inference
+                    container.exec_run([
+                        "python", "/data/ObjectDetection/ultralytics/inference_v1.py",
+                        "--checkpoint", checkpoint_path,
+                        "--input", f"/data/ObjectDetection/for_inference_od/od{model_id}/",
+                        "--output", f"/data/ObjectDetection/outputs/{model_id}/",
+                    ])
+
+                    # ownership fix
+                    container.exec_run([
+                        "chown", "-R", "1000:1000", "/data/"
+                    ])
+
+                finally:
+                    container.stop()
+                    container.remove()
 
 
                 timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
@@ -984,74 +1016,64 @@ def inference():
                         filepath = os.path.join(save_dir, filename)
                         file.save(filepath)
 
-                        try:
-                            container = client.containers.get(CONTAINER_SEGM_CLS)
-                            if container.status != "running":
-                                error_msg = f"Container '{CONTAINER_SEGM_CLS}' is not running"
-                                flash(error_msg, "warning")
-                                return render_template(
-                                    'inference.html',
-                                    mode         = mode,
-                                    model        = model,
-                                    results      = results,
-                                    metric_label = metric,
-                                )
-                        except docker.errors.NotFound:
-                            error_msg = f"Container '{CONTAINER_SEGM_CLS}' does not exist ! Ensure that you provide the correct name."
-                            flash(error_msg, "danger")
-                            return render_template(
-                                'inference.html',
-                                mode         = mode,
-                                model        = model,
-                                results      = results,
-                                metric_label = metric,
-                            )
+                    # Temporary container creation
+                    container = client.containers.run(
+                        IMAGE_SEGM_CLS,
+                        command="sleep infinity",
+                        detach=True,
+                        volumes={BASE_HOST_PATH_OUT: {"bind": "/data", "mode": "rw"}}
+                    )
 
-                        # Run inference for this specific image
-                        client.containers.get(CONTAINER_SEGM_CLS).exec_run([
-                        "python", "/data/Classification/inference.py",
-                        "--model_path", checkpoint_path,
-                        "--model", model_name,
-                        "--class_names", config_path,
-                        "--image", f"/data/Classification/for_inference/{model_id}/{filename}",
-                        "--output_dir", f"/data/Classification/inference_outputs/{model_id}/"
+                    try:
+                        # Run inference
+                        container.exec_run([
+                            "python", "/data/Classification/inference.py",
+                            "--model_path", checkpoint_path,
+                            "--model", model_name,
+                            "--class_names", config_path,
+                            "--image", f"/data/Classification/for_inference/{model_id}/{filename}",
+                            "--output_dir", f"/data/Classification/inference_outputs/{model_id}/"
                         ])
 
+                        # Fix permissions
+                        container.exec_run([
+                            "chown", "-R", "1000:1000", "/data/Classification/inference_outputs/"
+                        ])
 
-                        # Copy input to static
-                        shutil.copy(filepath, os.path.join(static_input_dir, filename))
-                        input_file = url_for('static', filename=f'media/for_inference/classification/{model_id}/{timestamp}/{filename}')
+                    finally:
+                        container.stop()
+                        container.remove()
 
-                        # Find the corresponding output file by matching the base name
-                        output_data_dir  = f"{BASE_HOST_PATH}/Classification/inference_outputs/{model_id}/"
-                        base_name        = os.path.splitext(filename)[0]  # Get filename without extension
-                        expected_output  = f"{base_name}.txt"
-                        output_file_path = os.path.join(output_data_dir, expected_output)
+                    # Copy input to static
+                    shutil.copy(filepath, os.path.join(static_input_dir, filename))
+                    input_file = url_for('static', filename=f'media/for_inference/classification/{model_id}/{timestamp}/{filename}')
+
+                    # Find the corresponding output file by matching the base name
+                    output_data_dir  = f"{BASE_HOST_PATH}/Classification/inference_outputs/{model_id}/"
+                    base_name        = os.path.splitext(filename)[0]  # Get filename without extension
+                    expected_output  = f"{base_name}.txt"
+                    output_file_path = os.path.join(output_data_dir, expected_output)
+                    
+                    output_text = None
+                    if os.path.exists(output_file_path):
+                        # Copy output to static
+                        shutil.copy(output_file_path, static_output_dir)
                         
-                        output_text = None
-                        if os.path.exists(output_file_path):
-                            # Copy output to static
-                            shutil.copy(output_file_path, static_output_dir)
-                            
-                            # Read the output text
-                            with open(output_file_path, 'r', encoding='utf-8') as f:
-                                output_text = f.read()
-                        else:
-                            print(f"WARNING: Output file not found for {filename}: {output_file_path}")
-                        
-                        results.append({
-                            'input_file' : input_file,
-                            'output_text': output_text,
-                            'filename'   : filename
-                        })
+                        # Read the output text
+                        with open(output_file_path, 'r', encoding='utf-8') as f:
+                            output_text = f.read()
+                    else:
+                        print(f"WARNING: Output file not found for {filename}: {output_file_path}")
+                    
+                    results.append({
+                        'input_file' : input_file,
+                        'output_text': output_text,
+                        'filename'   : filename
+                    })
 
-                client.containers.get(CONTAINER_SEGM_CLS).exec_run([
-                    "chown", "-R", "1000:1000", f"/data/Classification/inference_outputs/"
-                ])
-
-                success_msg = f"Inference for {len(files)} image(s) completed!"
-                remove_unnecessary_files(f"{BASE_HOST_PATH}/Classification/for_inference") 
-                remove_unnecessary_files(f"{BASE_HOST_PATH}/Classification/inference_outputs")
+            success_msg = f"Inference for {len(files)} image(s) completed!"
+            remove_unnecessary_files(f"{BASE_HOST_PATH}/Classification/for_inference") 
+            remove_unnecessary_files(f"{BASE_HOST_PATH}/Classification/inference_outputs")
     
     if success_msg: 
         flash(success_msg, "info")

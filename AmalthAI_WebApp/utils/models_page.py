@@ -18,8 +18,8 @@ def write_results(base_path, db_loc,mode):
             new_path_config = "/data/Segmentation" + config_path .split("/Segmentation", 1)[1]
             col_5 =  round(float(last_row[4]) * 100, 1)
         elif mode == "OD":
-            new_path_weights = "/data" + weights_path.split("/ObjectDetection", 1)[1]
-            new_path_config = "/data" + config_path .split("/ObjectDetection", 1)[1]
+            new_path_weights = "/data/ObjectDetection" + weights_path.split("/ObjectDetection", 1)[1]
+            new_path_config = "/data/ObjectDetection" + config_path .split("/ObjectDetection", 1)[1]
             col_5 =  round(float(last_row[4]), 4)
         elif mode == "Cls":
             new_path_weights = "/data/Classification" + weights_path.split("/Classification", 1)[1]

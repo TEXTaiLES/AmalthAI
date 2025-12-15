@@ -1,6 +1,7 @@
 import os
 import csv
 from datetime import datetime
+from PIL import Image
 
 
 # function to find the registered datasets
@@ -157,3 +158,15 @@ def load_models(csv_file):
             models.append(row)
     return models
 
+
+def get_max_image_size(items):
+    max_w, max_h = 0, 0
+    for it in items:
+        try:
+            img = Image.open(it["image"])
+            w, h = img.size
+            if w > max_w: max_w = w
+            if h > max_h: max_h = h
+        except:
+            pass
+    return max_w, max_h

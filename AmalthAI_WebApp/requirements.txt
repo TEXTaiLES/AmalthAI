@@ -96,3 +96,4 @@ tinydb==4.8.2
 tqdm==4.67.1
 tuspy==0.2.5
 typing-inspection==0.4.1
+Flask-Login==0.6.3
