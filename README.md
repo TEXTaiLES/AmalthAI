@@ -99,7 +99,7 @@ After pulling the base image, you have to create an updated image with all the n
 docker build -t segm_cls_image .
 ```
 
-The Platform's backend dynamically creates containers on demand for each segmentation or classification task. These containers are single-use and they are instantiated only for the duration of the task execution and automatically destroyed upon completion.
+The Platform's backend dynamically creates containers on demand for each segmentation, classification and object detection task. These containers are single-use and they are instantiated only for the duration of the task execution and automatically destroyed upon completion.
 
 2) For object detection task, you can use the official Ultralytics Docker image that has all the necessary libraries installed for running YOLO models.
 
