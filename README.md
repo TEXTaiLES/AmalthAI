@@ -29,6 +29,7 @@ Minimum system requirements for a local installation are:
  - RAM: at least 16 GB
  - GPU: NVIDIA GPU with at least 12 GB VRAM
  - OS: Ubuntu 22.04 or newer
+ - Browser: Google Chrome or Microsoft Edge
 
 ### Before You Start
 Make sure that you have cloned the following repository on your local machine:
@@ -81,26 +82,24 @@ When the above directory is mounted, make sure that you move every folder from t
 
 Important Note: Make sure that inside this folder you have created a folder named `Datasets` where all the datasets will be stored. Inside the `Datasets` folder, create three subfolders named `Segmentation`, `Classification` and `Object-Detection` for each task respectively.
 
-### Step 4 - Docker Containers Setup
+### Step 4 - Docker Images Setup
 Machine learning models require appropriate environments to run on. Because the platform is Kubernetes-based, there is need for ready-to-use docker containers. 
 
-1) For the semantic segmentation and the classification mode, to run the models a Docker container based on PyTorch is needed.
+1) For the semantic segmentation and the classification mode, to run the models, a Docker container based on PyTorch is needed.
 
-First of all, download the basic image using the followning command:
+First of all, download the basic image using the following command:
+
 ```bash
 docker pull nvcr.io/nvidia/pytorch:22.12-py3
 ```
+
 After pulling the base image, you have to create an updated image with all the necessary libraries installed. To do that, change your directory to `Backend/Segmentation/` and utilize the Dockerfile inside that folder by running the following command:
 
 ```bash
 docker build -t segm_cls_image .
 ```
 
-Finally, create a container based on the newly created image by running the following command:
-
-```bash
-docker run --gpus all -it --shm-size=32G --name segm_cls_container -v /path/to/backend/shared/folder:/data segm_cls_image
-```
+The Platform's backend dynamically creates containers on demand for each segmentation or classification task. These containers are single-use and they are instantiated only for the duration of the task execution and automatically destroyed upon completion.
 
 2) For object detection task, you can use the official Ultralytics Docker image that has all the necessary libraries installed for running YOLO models.
 
@@ -109,11 +108,6 @@ To build this image locally, you can perform the following steps:
 ```bash
 docker pull ultralytics/ultralytics:latest-python-export
 ```
-After pulling the base image, you have to create a container based on it to use it for inference. You can do that by running the following command:
-
-```bash
-docker run --gpus all -it  --shm-size=32G --name YOLO_Container -v /path/to/ObjectDetection/folder:/data ultralytics/ultralytics:latest-python-export
-```
 
 <p align="center">
     <a href = "https://pytorch.org/" target="_blank">
@@ -121,7 +115,7 @@ docker run --gpus all -it  --shm-size=32G --name YOLO_Container -v /path/to/Obje
     </a>
 </p>
 
-Important Note: After creating the above containers, make sure that you update config.yml file inside `/AmalthAI_WebApp` folder with the correct container names and the shared directory path where the `Segmentation`, `Classification` and `ObjectDetection` folders are located.
+Important Note: Make sure that you keep the config.yml file updated inside `/AmalthAI_WebApp` folder with the correct image names and the shared directory path where the `Segmentation`, `Classification` and `ObjectDetection` folders are located.
 
 ### Step 5 - Upload docker images into kind cluster
 
