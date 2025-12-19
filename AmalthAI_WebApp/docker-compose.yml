@@ -1,0 +1,26 @@
+name: amalthai
+
+services:
+  amalthai:
+    image: amalthai
+    container_name: amalthai
+    command: []
+    volumes:
+      - .:/app
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /path/to/shared/data:/data
+      - /path/to/kubeflow/config/.kube/config:/root/.kube/config
+    ports:
+      - "5000:5000"
+    networks:
+      - textailes
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.amalthai.rule=Host(`amalthai.textailes.athenarc.gr`)"
+      - "traefik.http.routers.amalthai.entrypoints=websecure"
+      - "traefik.http.routers.amalthai.tls.certresolver=le"
+    restart: "no"
+
+networks:
+  textailes:
+    external: true
