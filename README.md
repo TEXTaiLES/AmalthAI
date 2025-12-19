@@ -158,3 +158,7 @@ http://0.0.0.0:5000
 ## Documentation
 
 Additional documentation can be found on the documentation portal [here](https://textailes.github.io/AmalthAI-documentation/).
+
+## License
+
+The code is released under the [MIT License](https://opensource.org/licenses/MIT).
