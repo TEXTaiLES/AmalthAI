@@ -159,6 +159,22 @@ http://0.0.0.0:5000
 
 Additional documentation can be found on the documentation portal [here](https://textailes.github.io/AmalthAI-documentation/).
 
+## Citation
+
+If you use this software, please cite it using the following BibTeX entry:
+
+```bibtex
+@software{Athena_Research_Center_AmalthAI_Machine_Learning_2025,
+author = {{Athena Research Center}},
+license = {MIT},
+month = nov,
+title = {{AmalthAI Machine Learning Platform}},
+url = {https://github.com/TEXTaiLES/AmalthAI},
+version = {0.1.0},
+year = {2025}
+}
+```
+
 ## License
 
 The code is released under the [MIT License](https://opensource.org/licenses/MIT).
