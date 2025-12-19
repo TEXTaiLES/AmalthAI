@@ -20,8 +20,8 @@ keywords:
   - machine-learning
   - machine-learning-operations
   - object-detection
-  - semantic-segmentation
   - classification
+  - semantic-segmentation
+license: MIT
 version: 0.1.0
 date-released: '2025-11-28'
-
