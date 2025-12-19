@@ -19,7 +19,7 @@ services:
       - "traefik.http.routers.amalthai.rule=Host(`amalthai.textailes.athenarc.gr`)"
       - "traefik.http.routers.amalthai.entrypoints=websecure"
       - "traefik.http.routers.amalthai.tls.certresolver=le"
-    restart: "no"
+    restart: "always"
 
 networks:
   textailes:
