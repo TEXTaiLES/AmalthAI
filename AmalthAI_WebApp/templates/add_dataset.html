@@ -7,6 +7,13 @@
     {% set header_text= "Add new " ~ mode ~ " dataset" %}
     {% include 'partials/mode_header.html' %}
 
+    <!-- CVAT Button -->
+    <div class="mb-4">
+        <a href="https://localhost:8080/tasks/create" class="btn btn-primary" target="_blank">
+            <i class="bi bi-plus-circle me-2"></i>Create a new dataset using CVAT
+        </a>
+    </div>
+
     <form method="POST" action="{{ url_for('dataset_submit') }}" enctype="multipart/form-data" id="add-dataset-form">
         <!-- Body -->
         <div class="row">
