@@ -15,11 +15,14 @@ from utils.load_config import load_config
 import docker
 import zipfile
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+import requests
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 
 client = docker.from_env()
 
 app = Flask(__name__)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 app.secret_key = 'supersecret'
 app.config.from_file('config.toml', load=tomllib.load, text=False)
 
@@ -30,9 +33,7 @@ login_manager.login_view = "login"
 
 # Dummy user
 class User(UserMixin):
-    id = 1
-    username = "user"
-    password = "1234"  
+    id = 1  
     full_name = "Guest User"
 
 user_instance = User()
@@ -48,8 +49,18 @@ def login():
     if request.method == "POST":
         username = request.form.get("username")
         password = request.form.get("password")
-
-        if username == user_instance.username and password == user_instance.password:
+        
+        DIRECTUS_URL = "http://textailes.athenarc.gr"
+        resp = requests.post(
+            f"{DIRECTUS_URL}/auth/login",
+            json={
+                "email": username,
+                "password": password
+            },
+            headers={"Content-Type": "application/json"}
+        )
+        app.logger.info(f"Login response status: {resp.status_code}, body: {resp.text}")
+        if resp.ok:
             login_user(user_instance)
             return redirect(url_for("index"))
 
@@ -1092,4 +1103,4 @@ def inference():
 
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=8056)
