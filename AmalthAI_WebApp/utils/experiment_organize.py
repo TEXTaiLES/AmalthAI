@@ -2,11 +2,15 @@ import yaml
 import copy
 import kubeflow.katib as katib
 import random
+from utils.load_config import load_config
 
 '''
 This file contains functions to conduct Katib experiments for different types of models: segmentation, object detection, and classification.
 Each function creates a Katib experiment configuration, writes it to a YAML file, and then uses the Katib client to create and monitor the experiment.
 '''
+
+config = load_config("config.yml")
+KATIB_NAMESPACE = config.get("kubeflow").get("namespace")
 
 def conduct_experiment_seg(model_selection, timestamp_path, dataset, lr_left, lr_right, bs_left, bs_right, epochs_left, epochs_right, blur, scale, rotate, flip):
     allowed_bs = [2, 4, 8, 16, 32, 64]
@@ -17,7 +21,7 @@ def conduct_experiment_seg(model_selection, timestamp_path, dataset, lr_left, lr
         "kind": "Experiment",
         "metadata": {
             "name": "random-experiment",
-            "namespace": "kubeflow",
+            "namespace": KATIB_NAMESPACE,
             "annotations": {
                 "katib.kubeflow.org/metrics-collector-injection": "enabled"
             }
@@ -141,7 +145,7 @@ def conduct_experiment_seg(model_selection, timestamp_path, dataset, lr_left, lr
     with open("experiment.yaml", "r") as file:
         experiment_config = yaml.safe_load(file)
 
-    katib_client = katib.KatibClient(namespace="kubeflow")
+    katib_client = katib.KatibClient(namespace=KATIB_NAMESPACE)
     katib_client.create_experiment(experiment=experiment_config)
     result = katib_client.wait_for_experiment_condition(
         name=experiment_config['metadata']['name']
@@ -167,7 +171,7 @@ def conduct_experiment_od(model_selection, timestamp_path, dataset, lr_left, lr_
         "kind": "Experiment",
         "metadata": {
             "name": "random-experiment",
-            "namespace": "kubeflow",
+            "namespace": KATIB_NAMESPACE,
             "annotations": {
                 "katib.kubeflow.org/metrics-collector-injection": "enabled"
             }
@@ -290,7 +294,7 @@ def conduct_experiment_od(model_selection, timestamp_path, dataset, lr_left, lr_
     with open("experiment.yaml", "r") as file:
         experiment_config = yaml.safe_load(file)
 
-    katib_client = katib.KatibClient(namespace="kubeflow")
+    katib_client = katib.KatibClient(namespace=KATIB_NAMESPACE)
     katib_client.create_experiment(experiment=experiment_config)
     result = katib_client.wait_for_experiment_condition(
         name=experiment_config['metadata']['name']
@@ -316,7 +320,7 @@ def conduct_experiment_cls(model_selection, timestamp_path, dataset, lr_left, lr
         "kind": "Experiment",
         "metadata": {
             "name": "random-experiment",
-            "namespace": "kubeflow",
+            "namespace": KATIB_NAMESPACE,
             "annotations": {
                 "katib.kubeflow.org/metrics-collector-injection": "enabled"
             }
@@ -437,7 +441,7 @@ def conduct_experiment_cls(model_selection, timestamp_path, dataset, lr_left, lr
     with open("experiment.yaml", "r") as file:
         experiment_config = yaml.safe_load(file)
 
-    katib_client = katib.KatibClient(namespace="kubeflow")
+    katib_client = katib.KatibClient(namespace=KATIB_NAMESPACE)
     katib_client.create_experiment(experiment=experiment_config)
     result = katib_client.wait_for_experiment_condition(
         name=experiment_config['metadata']['name']

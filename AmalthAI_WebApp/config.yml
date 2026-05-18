@@ -11,6 +11,9 @@ images:
   classification: segm_cls_image:latest
   detection: ultralytics/ultralytics:latest
 
+kubeflow:
+  namespace: kubeflow
+
 defaults:
   pager_size: 30
   lr_lower: 0.001
