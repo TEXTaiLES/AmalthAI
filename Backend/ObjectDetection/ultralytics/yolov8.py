@@ -1,6 +1,8 @@
 from ultralytics import YOLO
 import argparse
 import datetime
+import os
+os.system("pip install pandas")
 import pandas as pd
 
 # Arguments for the parser

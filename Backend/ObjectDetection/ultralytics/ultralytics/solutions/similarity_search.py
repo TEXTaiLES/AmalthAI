@@ -1,24 +1,24 @@
 # Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
 
+from __future__ import annotations
+
 import os
 from pathlib import Path
-from typing import Any, List
+from typing import Any
 
 import numpy as np
 from PIL import Image
 
 from ultralytics.data.utils import IMG_FORMATS
-from ultralytics.nn.text_model import build_text_model
-from ultralytics.solutions.solutions import BaseSolution
+from ultralytics.utils import LOGGER, TORCH_VERSION
 from ultralytics.utils.checks import check_requirements
-from ultralytics.utils.torch_utils import select_device
+from ultralytics.utils.torch_utils import TORCH_2_4, select_device
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"  # Avoid OpenMP conflict on some systems
 
 
-class VisualAISearch(BaseSolution):
-    """
-    A semantic image search system that leverages OpenCLIP for generating high-quality image and text embeddings and
+class VisualAISearch:
+    """A semantic image search system that leverages OpenCLIP for generating high-quality image and text embeddings and
     FAISS for fast similarity-based retrieval.
 
     This class aligns image and text embeddings in a shared semantic space, enabling users to search large collections
@@ -32,7 +32,7 @@ class VisualAISearch(BaseSolution):
         data_dir (Path): Path object for the data directory.
         model: Loaded CLIP model.
         index: FAISS index for similarity search.
-        image_paths (List[str]): List of image file paths.
+        image_paths (list[str]): List of image file paths.
 
     Methods:
         extract_image_feature: Extract CLIP embedding from an image.
@@ -48,19 +48,21 @@ class VisualAISearch(BaseSolution):
 
     def __init__(self, **kwargs: Any) -> None:
         """Initialize the VisualAISearch class with FAISS index and CLIP model."""
-        super().__init__(**kwargs)
+        assert TORCH_2_4, f"VisualAISearch requires torch>=2.4 (found torch=={TORCH_VERSION})"
+        from ultralytics.nn.text_model import build_text_model
+
         check_requirements("faiss-cpu")
 
         self.faiss = __import__("faiss")
         self.faiss_index = "faiss.index"
         self.data_path_npy = "paths.npy"
-        self.data_dir = Path(self.CFG["data"])
-        self.device = select_device(self.CFG["device"])
+        self.data_dir = Path(kwargs.get("data", "images"))
+        self.device = select_device(kwargs.get("device", "cpu"))
 
         if not self.data_dir.exists():
             from ultralytics.utils import ASSETS_URL
 
-            self.LOGGER.warning(f"{self.data_dir} not found. Downloading images.zip from {ASSETS_URL}/images.zip")
+            LOGGER.warning(f"{self.data_dir} not found. Downloading images.zip from {ASSETS_URL}/images.zip")
             from ultralytics.utils.downloads import safe_download
 
             safe_download(url=f"{ASSETS_URL}/images.zip", unzip=True, retry=3)
@@ -75,15 +77,14 @@ class VisualAISearch(BaseSolution):
 
     def extract_image_feature(self, path: Path) -> np.ndarray:
         """Extract CLIP image embedding from the given image path."""
-        return self.model.encode_image(Image.open(path)).cpu().numpy()
+        return self.model.encode_image(Image.open(path)).detach().cpu().numpy()
 
     def extract_text_feature(self, text: str) -> np.ndarray:
         """Extract CLIP text embedding from the given text query."""
-        return self.model.encode_text(self.model.tokenize([text])).cpu().numpy()
+        return self.model.encode_text(self.model.tokenize([text])).detach().cpu().numpy()
 
     def load_or_build_index(self) -> None:
-        """
-        Load existing FAISS index or build a new one from image features.
+        """Load existing FAISS index or build a new one from image features.
 
         Checks if FAISS index and image paths exist on disk. If found, loads them directly. Otherwise, builds a new
         index by extracting features from all images in the data directory, normalizes the features, and saves both the
@@ -91,13 +92,13 @@ class VisualAISearch(BaseSolution):
         """
         # Check if the FAISS index and corresponding image paths already exist
         if Path(self.faiss_index).exists() and Path(self.data_path_npy).exists():
-            self.LOGGER.info("Loading existing FAISS index...")
+            LOGGER.info("Loading existing FAISS index...")
             self.index = self.faiss.read_index(self.faiss_index)  # Load the FAISS index from disk
             self.image_paths = np.load(self.data_path_npy)  # Load the saved image path list
             return  # Exit the function as the index is successfully loaded
 
         # If the index doesn't exist, start building it from scratch
-        self.LOGGER.info("Building FAISS index from images...")
+        LOGGER.info("Building FAISS index from images...")
         vectors = []  # List to store feature vectors of images
 
         # Iterate over all image files in the data directory
@@ -110,7 +111,7 @@ class VisualAISearch(BaseSolution):
                 vectors.append(self.extract_image_feature(file))
                 self.image_paths.append(file.name)  # Store the corresponding image name
             except Exception as e:
-                self.LOGGER.warning(f"Skipping {file.name}: {e}")
+                LOGGER.warning(f"Skipping {file.name}: {e}")
 
         # If no vectors were successfully created, raise an error
         if not vectors:
@@ -124,11 +125,10 @@ class VisualAISearch(BaseSolution):
         self.faiss.write_index(self.index, self.faiss_index)  # Save the newly built FAISS index to disk
         np.save(self.data_path_npy, np.array(self.image_paths))  # Save the list of image paths to disk
 
-        self.LOGGER.info(f"Indexed {len(self.image_paths)} images.")
+        LOGGER.info(f"Indexed {len(self.image_paths)} images.")
 
-    def search(self, query: str, k: int = 30, similarity_thresh: float = 0.1) -> List[str]:
-        """
-        Return top-k semantically similar images to the given query.
+    def search(self, query: str, k: int = 30, similarity_thresh: float = 0.1) -> list[str]:
+        """Return top-k semantically similar images to the given query.
 
         Args:
             query (str): Natural language text query to search for.
@@ -136,7 +136,7 @@ class VisualAISearch(BaseSolution):
             similarity_thresh (float, optional): Minimum similarity threshold for filtering results.
 
         Returns:
-            (List[str]): List of image filenames ranked by similarity score.
+            (list[str]): List of image filenames ranked by similarity score.
 
         Examples:
             Search for images matching a query
@@ -152,23 +152,22 @@ class VisualAISearch(BaseSolution):
         ]
         results.sort(key=lambda x: x[1], reverse=True)
 
-        self.LOGGER.info("\nRanked Results:")
+        LOGGER.info("\nRanked Results:")
         for name, score in results:
-            self.LOGGER.info(f"  - {name} | Similarity: {score:.4f}")
+            LOGGER.info(f"  - {name} | Similarity: {score:.4f}")
 
         return [r[0] for r in results]
 
-    def __call__(self, query: str) -> List[str]:
+    def __call__(self, query: str) -> list[str]:
         """Direct call interface for the search function."""
         return self.search(query)
 
 
 class SearchApp:
-    """
-    A Flask-based web interface for semantic image search with natural language queries.
+    """A Flask-based web interface for semantic image search with natural language queries.
 
-    This class provides a clean, responsive frontend that enables users to input natural language queries and
-    instantly view the most relevant images retrieved from the indexed database.
+    This class provides a clean, responsive frontend that enables users to input natural language queries and instantly
+    view the most relevant images retrieved from the indexed database.
 
     Attributes:
         render_template: Flask template rendering function.
@@ -186,9 +185,8 @@ class SearchApp:
         >>> app.run(debug=True)
     """
 
-    def __init__(self, data: str = "images", device: str = None) -> None:
-        """
-        Initialize the SearchApp with VisualAISearch backend.
+    def __init__(self, data: str = "images", device: str | None = None) -> None:
+        """Initialize the SearchApp with VisualAISearch backend.
 
         Args:
             data (str, optional): Path to directory containing images to index and search.
