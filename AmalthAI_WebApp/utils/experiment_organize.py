@@ -17,7 +17,7 @@ def conduct_experiment_seg(model_selection, timestamp_path, dataset, lr_left, lr
         "kind": "Experiment",
         "metadata": {
             "name": "random-experiment",
-            "namespace": "kubeflow-user-example-com",
+            "namespace": "kubeflow",
             "annotations": {
                 "katib.kubeflow.org/metrics-collector-injection": "enabled"
             }
@@ -70,7 +70,7 @@ def conduct_experiment_seg(model_selection, timestamp_path, dataset, lr_left, lr
                                 "containers": [
                                     {
                                         "name": "training-container",
-                                        "image": "segmentation-utils:v1",
+                                        "image": "segm_cls_image:latest",
                                         "imagePullPolicy": "IfNotPresent",
                                         "command": [
                                             "python",
@@ -91,7 +91,12 @@ def conduct_experiment_seg(model_selection, timestamp_path, dataset, lr_left, lr
                                             {"mountPath": "/dev/shm", "name": "shm"},
                                             {"mountPath": "/segmentation", "name": "segmentation"},
                                             {"mountPath": "/segm_datasets", "name": "segmentationdat"},
-                                        ]
+                                        ],
+                                        "resources": {
+                                            "limits": {
+                                                "nvidia.com/gpu": "1"
+                                            }
+                                        }
                                     }
                                 ],
                                 "volumes": [
@@ -136,7 +141,7 @@ def conduct_experiment_seg(model_selection, timestamp_path, dataset, lr_left, lr
     with open("experiment.yaml", "r") as file:
         experiment_config = yaml.safe_load(file)
 
-    katib_client = katib.KatibClient(namespace="kubeflow-user-example-com")
+    katib_client = katib.KatibClient(namespace="kubeflow")
     katib_client.create_experiment(experiment=experiment_config)
     result = katib_client.wait_for_experiment_condition(
         name=experiment_config['metadata']['name']
@@ -162,7 +167,7 @@ def conduct_experiment_od(model_selection, timestamp_path, dataset, lr_left, lr_
         "kind": "Experiment",
         "metadata": {
             "name": "random-experiment",
-            "namespace": "kubeflow-user-example-com",
+            "namespace": "kubeflow",
             "annotations": {
                 "katib.kubeflow.org/metrics-collector-injection": "enabled"
             }
@@ -236,7 +241,12 @@ def conduct_experiment_od(model_selection, timestamp_path, dataset, lr_left, lr_
                                             {"mountPath": "/dev/shm", "name": "shm"},
                                             {"mountPath": "/yolo", "name": "yolo"},
                                             {"mountPath": "/objdet_datasets", "name": "objdetdat"}
-                                        ]
+                                        ],
+                                        "resources": {
+                                            "limits": {
+                                                "nvidia.com/gpu": "1"
+                                            }
+                                        }
                                     }
                                 ],
                                 "volumes": [
@@ -280,7 +290,7 @@ def conduct_experiment_od(model_selection, timestamp_path, dataset, lr_left, lr_
     with open("experiment.yaml", "r") as file:
         experiment_config = yaml.safe_load(file)
 
-    katib_client = katib.KatibClient(namespace="kubeflow-user-example-com")
+    katib_client = katib.KatibClient(namespace="kubeflow")
     katib_client.create_experiment(experiment=experiment_config)
     result = katib_client.wait_for_experiment_condition(
         name=experiment_config['metadata']['name']
@@ -306,7 +316,7 @@ def conduct_experiment_cls(model_selection, timestamp_path, dataset, lr_left, lr
         "kind": "Experiment",
         "metadata": {
             "name": "random-experiment",
-            "namespace": "kubeflow-user-example-com",
+            "namespace": "kubeflow",
             "annotations": {
                 "katib.kubeflow.org/metrics-collector-injection": "enabled"
             }
@@ -359,7 +369,7 @@ def conduct_experiment_cls(model_selection, timestamp_path, dataset, lr_left, lr
                                 "containers": [
                                     {
                                         "name": "training-container",
-                                        "image": "segmentation-utils:v1",
+                                        "image": "segm_cls_image:latest",
                                         "imagePullPolicy": "IfNotPresent",
                                         "command": [
                                             "python",
@@ -379,7 +389,12 @@ def conduct_experiment_cls(model_selection, timestamp_path, dataset, lr_left, lr
                                             {"mountPath": "/dev/shm", "name": "shm"},
                                             {"mountPath": "/classification", "name": "classification"},
                                             {"mountPath": "/class_datasets", "name": "classdat"}
-                                        ]
+                                        ],
+                                        "resources": {
+                                            "limits": {
+                                                "nvidia.com/gpu": "1"
+                                            }
+                                        }
                                     }
                                 ],
                                 "volumes": [
@@ -422,7 +437,7 @@ def conduct_experiment_cls(model_selection, timestamp_path, dataset, lr_left, lr
     with open("experiment.yaml", "r") as file:
         experiment_config = yaml.safe_load(file)
 
-    katib_client = katib.KatibClient(namespace="kubeflow-user-example-com")
+    katib_client = katib.KatibClient(namespace="kubeflow")
     katib_client.create_experiment(experiment=experiment_config)
     result = katib_client.wait_for_experiment_condition(
         name=experiment_config['metadata']['name']
