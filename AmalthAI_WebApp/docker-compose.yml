@@ -8,10 +8,12 @@ services:
     volumes:
       - .:/app
       - /var/run/docker.sock:/var/run/docker.sock
-      - /path/to/shared/data:/data
-      - /path/to/kubeflow/config/.kube:/root/.kube
+      - /home/user/kubeflow/kind-data:/data
+      - /home/user/.kube/:/root/.kube/
+    environment:
+      - KUBECONFIG=/root/.kube/config
     ports:
-      - "5000:5000"
+      - "8056:8056"
     networks:
       - textailes
     labels:
