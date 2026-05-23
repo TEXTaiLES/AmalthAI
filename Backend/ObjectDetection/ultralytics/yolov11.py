@@ -50,14 +50,14 @@ model = YOLO("yolo11n.yaml").load("yolo11n.pt")  # build from YAML and transfer 
 
 current_time_micro = datetime.datetime.now().microsecond
 # Start training
-results = model.train(data= args.dataset, epochs=args.epochs, batch = args.bs,lr0 = args.lr, imgsz=460, device = [0],project=f"/yolo/runs/{args.timestamp}/YOLOv11", name=f"run_{current_time_micro}", hsv_h = args.hue, hsv_s = args.saturation, hsv_v = args.value, degrees = args.rotate, fliplr = args.flip)
+results = model.train(data= args.dataset, epochs=args.epochs, batch = args.bs,lr0 = args.lr, imgsz=460, device = [0],project=f"/yolosave/runs/{args.timestamp}/YOLOv11", name=f"run_{current_time_micro}", hsv_h = args.hue, hsv_s = args.saturation, hsv_v = args.value, degrees = args.rotate, fliplr = args.flip)
 
-df = pd.read_csv(f"/yolo/runs/{args.timestamp}/YOLOv11/run_{current_time_micro}/results.csv")
+df = pd.read_csv(f"/yolosave/runs/{args.timestamp}/YOLOv11/run_{current_time_micro}/results.csv")
 
 # Locate and print the required metric to help katib
 map5095 = df["metrics/mAP50-95(B)"].iloc[-1]
 print(f"map5095={map5095:.4f}")
 
-result_path = f"/yolo/runs/{args.timestamp}/YOLOv11/run_{current_time_micro}/result.txt"
+result_path = f"/yolosave/runs/{args.timestamp}/YOLOv11/run_{current_time_micro}/result.txt"
 with open(result_path, "w") as f:
     f.write(f"{map5095:.4f}\n")
