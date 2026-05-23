@@ -1,10 +1,6 @@
 paths:
   base_host_path: /data # inside the container
   base_host_path_out: /home/user/kubeflow/kind-data # outside the container
-  base_dataset_path: /data/Datasets
-  seg_inference_path: /static/media/for_inference/segmentation
-  det_inference_path: /static/media/for_inference/detection
-  cls_inference_path: /static/media/for_inference/classification
 
 images:
   segmentation: segm_cls_image:latest

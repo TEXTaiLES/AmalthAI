@@ -1,3 +1,4 @@
+import os
 import yaml
 import copy
 import kubeflow.katib as katib
@@ -11,8 +12,9 @@ Each function creates a Katib experiment configuration, writes it to a YAML file
 
 config = load_config("config.yml")
 KATIB_NAMESPACE = config.get("kubeflow").get("namespace")
+BASE_HOST_PATH = config.get("paths").get("base_host_path")
 
-def conduct_experiment_seg(model_selection, timestamp_path, dataset, lr_left, lr_right, bs_left, bs_right, epochs_left, epochs_right, blur, scale, rotate, flip):
+def conduct_experiment_seg(model_selection, timestamp_path, dataset, lr_left, lr_right, bs_left, bs_right, epochs_left, epochs_right, blur, scale, rotate, flip, user_slug):
     allowed_bs = [2, 4, 8, 16, 32, 64]
     filtered_bs = [str(x) for x in allowed_bs if bs_left <= x <= bs_right]
 
@@ -95,6 +97,7 @@ def conduct_experiment_seg(model_selection, timestamp_path, dataset, lr_left, lr
                                             {"mountPath": "/dev/shm", "name": "shm"},
                                             {"mountPath": "/segmentation", "name": "segmentation"},
                                             {"mountPath": "/segm_datasets", "name": "segmentationdat"},
+                                            {"mountPath": "/segmentationsave", "name": "segmentationsave"}
                                         ],
                                         "resources": {
                                             "limits": {
@@ -106,7 +109,8 @@ def conduct_experiment_seg(model_selection, timestamp_path, dataset, lr_left, lr
                                 "volumes": [
                                     {"name": "shm", "emptyDir": {"medium": "Memory", "sizeLimit": "32Gi"}},
                                     {"name": "segmentation", "hostPath": {"path": "/host/Segmentation", "type": "Directory"}},
-                                    {"name": "segmentationdat", "hostPath": {"path": "/host/Datasets/Segmentation", "type": "Directory"}}
+                                    {"name": "segmentationdat", "hostPath": {"path": f"/host/{user_slug}/Datasets/Segmentation", "type": "Directory"}},
+                                    {"name": "segmentationsave", "hostPath": {"path": f"/host/{user_slug}/Segmentation", "type": "Directory"}}
                                 ],
                                 "restartPolicy": "OnFailure"
                             }
@@ -137,12 +141,16 @@ def conduct_experiment_seg(model_selection, timestamp_path, dataset, lr_left, lr
         "--scale", str(scale).lower()
     ]
 
+    exp_dir = os.path.join(BASE_HOST_PATH, user_slug, "exps")
+    os.makedirs(exp_dir, exist_ok=True)
+    exp_path = os.path.join(exp_dir, f"seg_{model_selection.lower()}_{timestamp_path}.yaml")
+
     # Create YAML
-    with open("experiment.yaml", "w") as f:
+    with open(exp_path, "w") as f:
         yaml.dump(unet_experiment, f, sort_keys=False)
 
     # Perform Katib Experiment based on yaml
-    with open("experiment.yaml", "r") as file:
+    with open(exp_path, "r") as file:
         experiment_config = yaml.safe_load(file)
 
     katib_client = katib.KatibClient(namespace=KATIB_NAMESPACE)
@@ -165,7 +173,7 @@ def conduct_experiment_seg(model_selection, timestamp_path, dataset, lr_left, lr
     # Return the last status type
     return last_status_type
 
-def conduct_experiment_od(model_selection, timestamp_path, dataset, lr_left, lr_right, bs_left, bs_right, epochs_left, epochs_right, hue, saturation, value, rotate, flip):
+def conduct_experiment_od(model_selection, timestamp_path, dataset, lr_left, lr_right, bs_left, bs_right, epochs_left, epochs_right, hue, saturation, value, rotate, flip, user_slug):
     basic_yolo_katib_experiment = {
         "apiVersion": "kubeflow.org/v1beta1",
         "kind": "Experiment",
@@ -244,6 +252,7 @@ def conduct_experiment_od(model_selection, timestamp_path, dataset, lr_left, lr_
                                         "volumeMounts": [
                                             {"mountPath": "/dev/shm", "name": "shm"},
                                             {"mountPath": "/yolo", "name": "yolo"},
+                                            {"mountPath": "/yolosave", "name": "yolosave"},
                                             {"mountPath": "/objdet_datasets", "name": "objdetdat"}
                                         ],
                                         "resources": {
@@ -256,7 +265,8 @@ def conduct_experiment_od(model_selection, timestamp_path, dataset, lr_left, lr_
                                 "volumes": [
                                     {"name": "shm", "emptyDir": {"medium": "Memory", "sizeLimit": "32Gi"}},
                                     {"name": "yolo", "hostPath": {"path": "/host/ObjectDetection", "type": "Directory"}},
-                                    {"name": "objdetdat", "hostPath": {"path": "/host/Datasets/Object-Detection", "type": "Directory"}}
+                                    {"name": "yolosave", "hostPath": {"path": f"/host/{user_slug}/ObjectDetection", "type": "Directory"}},
+                                    {"name": "objdetdat", "hostPath": {"path": f"/host/{user_slug}/Datasets/Object-Detection", "type": "Directory"}}
                                 ],
                                 "restartPolicy": "OnFailure"
                             }
@@ -286,12 +296,16 @@ def conduct_experiment_od(model_selection, timestamp_path, dataset, lr_left, lr_
         "--flip", str(flip)
     ]
 
+    exp_dir = os.path.join(BASE_HOST_PATH, user_slug, "exps")
+    os.makedirs(exp_dir, exist_ok=True)
+    exp_path = os.path.join(exp_dir, f"od_{model_selection.lower()}_{timestamp_path}.yaml")
+
     # Create YAML
-    with open("experiment.yaml", "w") as f:
+    with open(exp_path, "w") as f:
         yaml.dump(yolo_experiment, f, sort_keys=False)
 
     # Perform Katib Experiment based on yaml
-    with open("experiment.yaml", "r") as file:
+    with open(exp_path, "r") as file:
         experiment_config = yaml.safe_load(file)
 
     katib_client = katib.KatibClient(namespace=KATIB_NAMESPACE)
@@ -314,7 +328,7 @@ def conduct_experiment_od(model_selection, timestamp_path, dataset, lr_left, lr_
     # Return the last status type
     return last_status_type
 
-def conduct_experiment_cls(model_selection, timestamp_path, dataset, lr_left, lr_right, bs_left, bs_right, epochs_left, epochs_right, blur, rotate, flip):
+def conduct_experiment_cls(model_selection, timestamp_path, dataset, lr_left, lr_right, bs_left, bs_right, epochs_left, epochs_right, blur, rotate, flip, user_slug):
     basic_classification_katib_experiment = {
         "apiVersion": "kubeflow.org/v1beta1",
         "kind": "Experiment",
@@ -392,7 +406,8 @@ def conduct_experiment_cls(model_selection, timestamp_path, dataset, lr_left, lr
                                         "volumeMounts": [
                                             {"mountPath": "/dev/shm", "name": "shm"},
                                             {"mountPath": "/classification", "name": "classification"},
-                                            {"mountPath": "/class_datasets", "name": "classdat"}
+                                            {"mountPath": "/class_datasets", "name": "classdat"},
+                                            {"mountPath": "/classsave", "name": "classsave"}
                                         ],
                                         "resources": {
                                             "limits": {
@@ -404,7 +419,8 @@ def conduct_experiment_cls(model_selection, timestamp_path, dataset, lr_left, lr
                                 "volumes": [
                                     {"name": "shm", "emptyDir": {"medium": "Memory", "sizeLimit": "32Gi"}},
                                     {"name": "classification", "hostPath": {"path": "/host/Classification", "type": "Directory"}},
-                                    {"name": "classdat", "hostPath": {"path": "/host/Datasets/Classification", "type": "Directory"}}
+                                    {"name": "classdat", "hostPath": {"path": f"/host/{user_slug}/Datasets/Classification", "type": "Directory"}},
+                                    {"name": "classsave", "hostPath": {"path": f"/host/{user_slug}/Classification", "type": "Directory"}}
                                 ],
                                 "restartPolicy": "OnFailure"
                             }
@@ -433,12 +449,16 @@ def conduct_experiment_cls(model_selection, timestamp_path, dataset, lr_left, lr
         "--flip", str(flip).lower()
     ]
 
+    exp_dir = os.path.join(BASE_HOST_PATH, user_slug, "exps")
+    os.makedirs(exp_dir, exist_ok=True)
+    exp_path = os.path.join(exp_dir, f"cls_{model_selection.lower()}_{timestamp_path}.yaml")
+
     # Create YAML
-    with open("experiment.yaml", "w") as f:
+    with open(exp_path, "w") as f:
         yaml.dump(classification_experiment, f, sort_keys=False)
 
     # Perform Katib Experiment based on yaml
-    with open("experiment.yaml", "r") as file:
+    with open(exp_path, "r") as file:
         experiment_config = yaml.safe_load(file)
 
     katib_client = katib.KatibClient(namespace=KATIB_NAMESPACE)

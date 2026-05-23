@@ -25,6 +25,12 @@ parser.add_argument(
     help="Prefered model"
 )
 parser.add_argument(
+    "--user",
+    type=str,
+    required=True,
+    help="User slug for per-user paths"
+)
+parser.add_argument(
     "--dataset", 
     type=str, 
     default="/yolo/........",
@@ -107,6 +113,7 @@ parser.add_argument(
 
 args = parser.parse_args()
 model_selection = args.model
+user_slug = args.user
 dataset = os.path.join("/objdet_datasets", args.dataset)
 dataset = os.path.join(dataset, "data.yaml")
 print(dataset)
@@ -139,7 +146,7 @@ if model_selection == "allmodels":
     all_success = True  # flag
 
     for model in models_list:
-        res = conduct_experiment_od(model, timestamp_path, dataset, lr_left, lr_right, bs_left, bs_right, epoch_left, epoch_right, hue, saturation, value, rotate, flip)
+        res = conduct_experiment_od(model, timestamp_path, dataset, lr_left, lr_right, bs_left, bs_right, epoch_left, epoch_right, hue, saturation, value, rotate, flip, user_slug)
         print(f"Last condition for {model}: {res}")
 
         if res != "Succeeded":
@@ -148,14 +155,14 @@ if model_selection == "allmodels":
     final_res = "Succeeded" if all_success else "Failed"
 
 else:
-    final_res = conduct_experiment_od(model_selection, timestamp_path, dataset, lr_left, lr_right, bs_left, bs_right, epoch_left, epoch_right, hue, saturation, value, rotate, flip)
+    final_res = conduct_experiment_od(model_selection, timestamp_path, dataset, lr_left, lr_right, bs_left, bs_right, epoch_left, epoch_right, hue, saturation, value, rotate, flip, user_slug)
     print(f"Last condition for {model_selection}: {final_res}")
 
 
 if final_res == "Succeeded":
     print("Experiment completed successfully.")
-    base_path = f"{BASE_HOST_PATH}/ObjectDetection/runs/"
-    csv_path = f"{BASE_HOST_PATH}/ObjectDetection/runs/user_experiments.csv"
+    base_path = f"{BASE_HOST_PATH}/{user_slug}/ObjectDetection/runs/"
+    csv_path = f"{BASE_HOST_PATH}/{user_slug}/ObjectDetection/runs/user_experiments.csv"
     experiment_path = os.path.join(base_path, timestamp_path)
     os.makedirs(experiment_path, exist_ok=True)
     

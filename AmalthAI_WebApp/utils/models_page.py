@@ -2,7 +2,7 @@ import csv
 from datetime import datetime
 
 # a function to write results to a CSV database for the 3 supported tasks
-def write_results(base_path, db_loc,mode):
+def write_results(base_path, db_loc, mode, user_slug=None):
     with open(base_path, newline='', encoding='utf-8') as myfile:
         lines = list(csv.reader(myfile))
         last_row = lines[-1]
@@ -14,16 +14,25 @@ def write_results(base_path, db_loc,mode):
         weights_path = last_row[5]
         config_path = last_row[6]
         if mode == "Seg":
-            new_path_weights = "/data/Segmentation" + weights_path.split("/Segmentation", 1)[1]
-            new_path_config = "/data/Segmentation" + config_path .split("/Segmentation", 1)[1]
+            data_prefix = "/data"
+            if user_slug:
+                data_prefix = f"/data/{user_slug}"
+            new_path_weights = data_prefix + "/Segmentation" + weights_path.split("/Segmentation", 1)[1]
+            new_path_config = data_prefix + "/Segmentation" + config_path .split("/Segmentation", 1)[1]
             col_5 =  round(float(last_row[4]) * 100, 1)
         elif mode == "OD":
-            new_path_weights = "/data/ObjectDetection" + weights_path.split("/ObjectDetection", 1)[1]
-            new_path_config = "/data/ObjectDetection" + config_path .split("/ObjectDetection", 1)[1]
+            data_prefix = "/data"
+            if user_slug:
+                data_prefix = f"/data/{user_slug}"
+            new_path_weights = data_prefix + "/ObjectDetection" + weights_path.split("/ObjectDetection", 1)[1]
+            new_path_config = data_prefix + "/ObjectDetection" + config_path .split("/ObjectDetection", 1)[1]
             col_5 =  round(float(last_row[4]), 4)
         elif mode == "Cls":
-            new_path_weights = "/data/Classification" + weights_path.split("/Classification", 1)[1]
-            new_path_config = "/data/Classification" + config_path .split("/Classification", 1)[1]
+            data_prefix = "/data"
+            if user_slug:
+                data_prefix = f"/data/{user_slug}"
+            new_path_weights = data_prefix + "/Classification" + weights_path.split("/Classification", 1)[1]
+            new_path_config = data_prefix + "/Classification" + config_path .split("/Classification", 1)[1]
             col_5 =  round(float(last_row[4]), 2)
 
         new_row = [col_3, col_1, col_5, today,new_path_weights,new_path_config]

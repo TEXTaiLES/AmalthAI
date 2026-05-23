@@ -59,7 +59,11 @@ def comparensave(experiment_dir, timestamp, csv_path, dataset_path, mode, maximi
                     'weights': weights_path,
                     'config': config_path
                 }
+    if best_run is None:
+        return None
+
     file_exists = os.path.isfile(csv_path)
+    os.makedirs(os.path.dirname(csv_path), exist_ok=True)
 
     with open(csv_path, mode='a', newline='') as f:
         writer = csv.DictWriter(f, fieldnames=best_run.keys())
