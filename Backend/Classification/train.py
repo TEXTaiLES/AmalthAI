@@ -28,7 +28,7 @@ def train(config):
     best_acc = 0.0
 
     current_time_micro = datetime.datetime.now().microsecond
-    save_dir = os.path.join("/classification/runs", config.save_path, config.model, f"saved_{current_time_micro}")
+    save_dir = os.path.join("/classsave/runs", config.save_path, config.model, f"saved_{current_time_micro}")
     os.makedirs(save_dir, exist_ok=True)
     save_path = os.path.join(save_dir, "best_model.pth")
     with open(os.path.join(save_dir, "class_names.json"), "w") as f:
