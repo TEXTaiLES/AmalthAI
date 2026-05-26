@@ -8,6 +8,9 @@ import glob
 import csv
 from datetime import datetime
 import shutil
+import threading
+import json
+import uuid
 from utils.models_page import write_results
 from utils.helpers import load_datasets, load_models_available, load_dataset_info, get_max_image_size, load_models
 from utils.load_config import load_config
@@ -130,6 +133,7 @@ def ensure_user_folders(slug):
         os.path.join(root, "inference", "classification"),
         os.path.join(root, "tmp_datasets_zips"),
         os.path.join(root, "tmp_datasets"),
+        os.path.join(root, "train_jobs"),
     ]
 
     for path in paths:
@@ -138,6 +142,38 @@ def ensure_user_folders(slug):
     ensure_model_db_file(os.path.join(root, "models_db", "trained_models_db_segm.csv"))
     ensure_model_db_file(os.path.join(root, "models_db", "trained_models_db_od.csv"))
     ensure_model_db_file(os.path.join(root, "models_db", "trained_models_db_cls.csv"))
+
+
+def _job_status_path(user_slug, job_id):
+    return os.path.join(user_root(user_slug), "train_jobs", f"{job_id}.json")
+
+
+def _write_job_status(user_slug, job_id, data):
+    os.makedirs(os.path.dirname(_job_status_path(user_slug, job_id)), exist_ok=True)
+    with open(_job_status_path(user_slug, job_id), "w", encoding="utf-8") as handle:
+        json.dump(data, handle)
+
+
+def _read_job_status(user_slug, job_id):
+    path = _job_status_path(user_slug, job_id)
+    if not os.path.exists(path):
+        return None
+    with open(path, "r", encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def _run_training_job(user_slug, job_id, cmd, mode, paths):
+    try:
+        process = subprocess.run(cmd)
+        if process.returncode == 0:
+            write_results(*paths[mode])
+            status = {"status": "succeeded", "return_code": process.returncode}
+        else:
+            status = {"status": "failed", "return_code": process.returncode}
+    except Exception as exc:
+        status = {"status": "failed", "return_code": None, "error": str(exc)}
+
+    _write_job_status(user_slug, job_id, status)
 
 
 @app.route("/user-datasets/<path:filename>")
@@ -844,26 +880,27 @@ def train_model_submit():
         ]
     }
     
-    process = subprocess.run(subprocesses[mode])
+    job_id = str(uuid.uuid4())
+    _write_job_status(user_slug, job_id, {"status": "running", "mode": mode})
 
-    success_msg = None
-    error_msg   = None
+    thread = threading.Thread(
+        target=_run_training_job,
+        args=(user_slug, job_id, subprocesses[mode], mode, paths),
+        daemon=True,
+    )
+    thread.start()
 
-    if process.returncode != 0:
-        error_msg = f"Training failed: {process.returncode}"
-        flash(error_msg, "danger")
-    else:
-        success_msg = f"Training successful!"
-        write_results(*paths[mode])
-        flash(success_msg, "info")
-    
-    # flash is omega bugged on redirect, we flash
-    return redirect(url_for(
-        "models",
-        mode=mode,
-        msg=success_msg if success_msg is not None else error_msg,
-        msg_type="danger" if error_msg is not None else "info"
-    ))
+    return jsonify({"status": "running", "job_id": job_id})
+
+
+@app.route('/train_status/<job_id>', methods=["GET"])
+@login_required
+def train_status(job_id):
+    user_slug = get_current_user_slug()
+    status = _read_job_status(user_slug, job_id)
+    if not status:
+        return jsonify({"error": "job_not_found"}), 404
+    return jsonify(status)
 
 
 @app.route('/inference', methods=['GET', 'POST'])

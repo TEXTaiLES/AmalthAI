@@ -77,6 +77,17 @@ document.addEventListener("DOMContentLoaded", () => {
     // VALIDATION FUNCTION (uses merged per-param checks)
     //----------------------------------------------------------------------
 
+    let trainingLocked = false;
+
+    function setTrainingLocked(locked) {
+        trainingLocked = locked;
+        if (locked) {
+            trainBtn.disabled = true;
+        } else {
+            validate();
+        }
+    }
+
     function validate() {
 
         let valid = true;
@@ -112,7 +123,9 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
 
-        trainBtn.disabled = !valid;
+        if (!trainingLocked) {
+            trainBtn.disabled = !valid;
+        }
         return valid;
     }
 
@@ -147,7 +160,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     trainBtn.addEventListener("click", () => {
 
-        if (!validate()) return;
+        if (!validate() || trainingLocked) return;
 
         // Build POST data
         const formData = new FormData();
@@ -194,20 +207,14 @@ document.addEventListener("DOMContentLoaded", () => {
             method: "POST",
             body: formData
         })
-        .then(res => {
-            if (res.redirected) {
-                // follow redirect (will unload page)
-                window.location.href = res.url;
-                return;
+        .then(res => res.json())
+        .then(data => {
+            if (data && data.job_id) {
+                localStorage.setItem("trainingJobId", data.job_id);
+                startStatusPolling(data.job_id);
             }
-
-            // Not redirected — hide spinner and re-enable controls so user can fix issues
-            spinner && spinner.classList.add("d-none");
             trainBtn.disabled = false;
             controls.forEach(el => el.disabled = false);
-
-            // Optionally handle non-redirect responses here (show message, etc.)
-            return res.text();
         })
         .catch(err => {
             console.error("Training POST error:", err);
@@ -219,5 +226,99 @@ document.addEventListener("DOMContentLoaded", () => {
             controls.forEach(el => el.disabled = false);
         });
     });
+
+    //---------------------------------------------------------------------
+    // STATUS POLLING
+    //----------------------------------------------------------------------
+
+    const statusBox = document.getElementById("trainStatus");
+    let pollTimer = null;
+
+    function renderStatus(text, type) {
+        if (!statusBox) return;
+        statusBox.classList.remove("d-none", "alert-info", "alert-success", "alert-danger");
+        statusBox.classList.add(type || "alert-info");
+        statusBox.textContent = text;
+    }
+
+    function stopPolling() {
+        if (pollTimer) {
+            clearInterval(pollTimer);
+            pollTimer = null;
+        }
+    }
+
+    function refreshTrainingLock(jobId) {
+        fetch(`/train_status/${jobId}`)
+            .then(res => res.ok ? res.json() : null)
+            .then(data => {
+                if (!data || !data.status) {
+                    setTrainingLocked(false);
+                    return;
+                }
+
+                if (data.status === "running") {
+                    setTrainingLocked(true);
+                } else {
+                    localStorage.removeItem("trainingJobId");
+                    setTrainingLocked(false);
+                }
+            })
+            .catch(() => {
+                setTrainingLocked(false);
+            });
+    }
+
+    function startStatusPolling(jobId) {
+        renderStatus("Training is in progress. Navigate freely.", "alert-info");
+
+        const spinner = document.getElementById("trainSpinner");
+        spinner && spinner.classList.remove("d-none");
+
+        if (pollTimer) stopPolling();
+        pollTimer = setInterval(() => {
+            fetch(`/train_status/${jobId}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (!data || !data.status) return;
+
+                    if (data.status === "running") {
+                        renderStatus("Training is in progress. Navigate freely.", "alert-info");
+                        setTrainingLocked(true);
+                        return;
+                    }
+
+                    if (data.status === "succeeded") {
+                        renderStatus("Training completed. Check Models for results.", "alert-success");
+                        localStorage.removeItem("trainingJobId");
+                        spinner && spinner.classList.add("d-none");
+                        setTrainingLocked(false);
+                        stopPolling();
+                        const msg = encodeURIComponent("Training finished successfully!");
+                        window.location.href = `/models?msg=${msg}&msg_type=info`;
+                        return;
+                    }
+
+                    if (data.status === "failed") {
+                        renderStatus("Training failed. Check logs for details.", "alert-danger");
+                        localStorage.removeItem("trainingJobId");
+                        spinner && spinner.classList.add("d-none");
+                        setTrainingLocked(false);
+                        stopPolling();
+                        const msg = encodeURIComponent("Training failed. Check logs for details.");
+                        window.location.href = `/models?msg=${msg}&msg_type=danger`;
+                    }
+                })
+                .catch(err => {
+                    console.error("Status polling error:", err);
+                });
+        }, 4000);
+    }
+
+    const existingJobId = localStorage.getItem("trainingJobId");
+    if (existingJobId) {
+        refreshTrainingLock(existingJobId);
+        startStatusPolling(existingJobId);
+    }
 
 });
