@@ -5,7 +5,7 @@
     "arch": {
         "type": "PSPNet",
         "args": {
-            "backbone": "resnet50",
+            "backbone": "resnet18",
             "freeze_bn": false,
             "freeze_backbone": true
         }
