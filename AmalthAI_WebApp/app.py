@@ -28,20 +28,20 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = "login"
 
-# Dummy user
-class User(UserMixin):
-    id = "guest"
-    full_name = "Guest User"
-    email = None
-    slug = None
+# Lightweight in-memory user registry (per process)
+_user_registry = {}
 
-user_instance = User()
+
+class User(UserMixin):
+    def __init__(self, user_id, email=None, slug=None, full_name=None):
+        self.id = user_id
+        self.email = email
+        self.slug = slug
+        self.full_name = full_name
 
 @login_manager.user_loader
 def load_user(user_id):
-    if str(user_id) == str(user_instance.id):
-        return user_instance
-    return None
+    return _user_registry.get(str(user_id))
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -60,12 +60,16 @@ def login():
         )
         app.logger.info(f"Login response status: {resp.status_code}, body: {resp.text}")
         if resp.ok:
-            user_instance.email = username
-            user_instance.slug = safe_user_slug(username)
-            user_instance.full_name = f"@{user_instance.slug}"
-            user_instance.id = user_instance.slug
-            ensure_user_folders(user_instance.slug)
-            login_user(user_instance)
+            slug = safe_user_slug(username)
+            user = User(
+                user_id=slug,
+                email=username,
+                slug=slug,
+                full_name=f"@{slug}",
+            )
+            _user_registry[str(user.id)] = user
+            ensure_user_folders(slug)
+            login_user(user)
             return redirect(url_for("index"))
 
         flash("Wrong Credentials.")
