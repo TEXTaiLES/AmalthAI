@@ -156,7 +156,14 @@ def main():
     if not os.path.exists('outputs'):
         os.makedirs('outputs')
 
-    image_files = sorted(glob(os.path.join(args.images, f'*.{args.extension}')))
+    extensions = ['jpg', 'jpeg', 'png']
+    image_files = []
+    for ext in extensions:
+        image_files.extend(glob(os.path.join(args.images, f'*.{ext}')))
+        image_files.extend(glob(os.path.join(args.images, f'*.{ext.upper()}')))
+
+    image_files = sorted(image_files)
+
     with torch.no_grad():
         tbar = tqdm(image_files, ncols=100)
         for img_file in tbar:
@@ -185,8 +192,6 @@ def parse_arguments():
                         help='Path to the images to be segmented')
     parser.add_argument('-o', '--output', default='outputs', type=str,  
                         help='Output Path')
-    parser.add_argument('-e', '--extension', default='jpg', type=str,
-                        help='The extension of the images to be segmented')
     args = parser.parse_args()
     return args
 
