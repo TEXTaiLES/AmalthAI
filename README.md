@@ -39,7 +39,7 @@ git clone https://github.com/TEXTaiLES/AmalthAI
 ```
 - The `AmalthAI_WebApp` folder contains the web app code, which is necessary for the platform's UI. 
 
-- The `Backend` folder contains all the necessary code for the platform's functionality which includes machine learning models, data processing scripts, and deployment configurations. Ensure that the content of the backend folder is also shared across the Kubernetes cluster and the corresponding containers.
+- The `Backend` folder contains all the necessary code for the platform's functionality which includes machine learning models, data processing scripts, and deployment configurations.
 
 ### Step 1 - Docker Installation
 Make sure that you have a local installation of [Docker](https://www.docker.com/). You can follow the installation process described [here](https://docs.docker.com/engine/install/ubuntu/):
@@ -50,8 +50,8 @@ Make sure that you have a local installation of [Docker](https://www.docker.com/
     </a>
 </p>
 
-### Step 2 - Kubernetes Installation
-[Kubernetes](https://kubernetes.io/) installation is required to orchestrate the different components of the platform. You can follow the official installation tutorial [here](https://kubernetes.io/docs/setup/):
+### Step 2 - kubectl and kind Installation
+Instead of a full Kubernetes installation, this platform uses kind (Kubernetes in Docker) for local cluster management. For kubectl installation, follow the instructions [here](https://kubernetes.io/docs/tasks/tools/install-kubectl-linux/). For kind installation, follow the instructions [here](https://kind.sigs.k8s.io/docs/user/quick-start/#installation).
 
 <p align="center">
     <a href = "https://kubernetes.io/docs/setup/" target="_blank">
@@ -59,28 +59,47 @@ Make sure that you have a local installation of [Docker](https://www.docker.com/
     </a>
 </p>
 
-### Step 3 - Kubeflow Installation
-[Kubeflow](https://www.kubeflow.org/) installation is also required because experiment initialization is based on it. For installation, follow the instructions [here](https://www.kubeflow.org/docs/started/installing-kubeflow/):
+### Step 3 - Cluster Setup and Katib Installation
+
+**Create the kind cluster:**
+```bash
+kind create cluster --name=kubeflow --config=cluster-config.yml
+docker exec -ti kubeflow-control-plane ln -s /sbin/ldconfig /sbin/ldconfig.real
+```
+The `cluster-config.yml` file can be found under the `Backend` folder.
+
+**Install Helm:**
+```bash
+sudo snap install helm
+```
+
+Before you continue, make sure to install the NVIDIA toolkit on the local machine to establish connection with GPU resources.
+
+**Install NVIDIA GPU Operator:**
+```bash
+helm repo add nvidia https://helm.ngc.nvidia.com/nvidia || true
+helm repo update
+helm install --wait --generate-name \
+  -n gpu-operator --create-namespace \
+  nvidia/gpu-operator --set driver.enabled=false
+```
+
+**Install Katib (standalone):**
+```bash
+kubectl apply -k "github.com/kubeflow/katib.git/manifests/v1beta1/installs/katib-standalone?ref=v0.17.0"
+```
+
+Also, ensure that the cluster:
+
+ - has at least one directory shared between the cluster and the local machine (located inside the `config.yml` file under `extraMounts` as `containerPath` and `hostPath` respectively).
+
+When the above directory is mounted, make sure that you move every folder from the `Backend` folder inside that directory so that the three tasks are accessible from the Katib pipelines.
 
 <p align="center">
     <a href = "https://www.kubeflow.org/docs/started/installing-kubeflow/" target="_blank">
         <img src="images/kubeflow_logo.png" alt="Kubeflow" width="200"/>
     </a>
 </p>
-
-For local development and quick testing, the [kind](https://kind.sigs.k8s.io/) tool can be used.
-
-Ensure that the Kubeflow installation:
-
- - is accessible from the Python environment, i.e. the Kubeflow Python SDK can connect to the API
- 
- - has at least one directory mounted as a `PersistentVolume` or a `hostPath`
-
- - has GPU access
-
-When the above directory is mounted, make sure that you move every folder from the `Backend` folder inside that directory so that the three tasks are accessible from the Kubeflow pipelines.
-
-Important Note: Make sure that inside this folder you have created a folder named `Datasets` where all the datasets will be stored. Inside the `Datasets` folder, create three subfolders named `Segmentation`, `Classification` and `Object-Detection` for each task respectively.
 
 ### Step 4 - Docker Images Setup
 Machine learning models require appropriate environments to run on. Because the platform is Kubernetes-based, there is need for ready-to-use docker containers. 
@@ -106,7 +125,7 @@ The Platform's backend dynamically creates containers on demand for each segment
 To build this image locally, you can perform the following steps:
 
 ```bash
-docker pull ultralytics/ultralytics:latest-python-export
+docker pull ultralytics/ultralytics:latest
 ```
 
 <p align="center">
@@ -125,7 +144,7 @@ To upload a locally built Docker image to your Kubernetes cluster, you have to r
 kind load docker-image myimage:latest --name name-of-your-cluster
 ``` 
 
-For the AmalthAI platform, you have to upload both the `segm_cls_image` and the `ultralytics/ultralytics:latest-python-export` images into the kind cluster.
+For the AmalthAI platform, you have to upload both the `segm_cls_image` and the `ultralytics/ultralytics:latest` images into the kind cluster.
 
 ### Step 6 - CVAT Installation
 For the annotation purposes of this platform, we utilize [CVAT](https://www.cvat.ai/) annotation tool. To install it on your system, follow the instructions that are provided [here](https://docs.cvat.ai/docs/administration/basics/installation/).
@@ -145,14 +164,14 @@ For the platform's UI, you have to create a Docker container with the appropriat
 docker build -t amalthai .
 ```
 
-2) After the build is completed, you can run the container with the following command:
+2) After the build is completed, you can start the application with the following command:
 ```shell
-docker run --rm --network=host -v $(pwd):/app -v /var/run/docker.sock:/var/run/docker.sock -v /path/to/backend/shared/folder:/data -v ~/.kube/config:/root/.kube/config amalthai
+docker compose up -d
 ```
 
 Then you can easily navigate to the web app, by opening your browser and going to:
 ```
-http://0.0.0.0:5000
+http://0.0.0.0:8056
 ```
 
 ## Documentation
