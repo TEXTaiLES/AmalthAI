@@ -98,7 +98,7 @@ def main():
     args = parse_arguments()
     config = json.load(open(args.config))
     
-    new_root = "/data/Datasets/Segmentation"
+    new_root = f"/data/{args.user_slug}/Datasets/Segmentation"
 
     def update_path(d, keys, file_key="data_dir"):
         for key in keys:
@@ -192,6 +192,8 @@ def parse_arguments():
                         help='Path to the images to be segmented')
     parser.add_argument('-o', '--output', default='outputs', type=str,  
                         help='Output Path')
+    parser.add_argument('-u', '--user-slug', default='guest', type=str,
+                        help='User slug for path construction')
     args = parser.parse_args()
     return args
 

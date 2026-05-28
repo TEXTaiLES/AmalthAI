@@ -980,6 +980,7 @@ def inference():
                         "python", "/data/Segmentation/inference_cvat.py",
                         "-c", config_path,
                         "-m", checkpoint_path,
+                        "-u", user_slug,
                         "-i", f"/data/{user_slug}/inference/segmentation/inputs/{model_id}/{timestamp}/",
                         "-o", f"/data/{user_slug}/inference/segmentation/outputs/{model_id}/{timestamp}/"
                     ])
