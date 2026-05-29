@@ -12,7 +12,7 @@ import threading
 import json
 import uuid
 from utils.models_page import write_results
-from utils.helpers import load_datasets, load_models_available, load_dataset_info, get_max_image_size, load_models
+from utils.helpers import load_datasets, load_models_available, load_dataset_info, get_max_image_size, load_models, get_best_timestamp
 from utils.load_config import load_config
 import docker
 import zipfile
@@ -292,8 +292,8 @@ def collections():
         enriched = []
         for d in datasets:
             folder_path = os.path.join(base_path, d["id"])
-            creation_timestamp = os.path.getctime(folder_path)
-            creation_date = datetime.fromtimestamp(creation_timestamp).strftime("%d/%m/%Y") # fixes the format to be the same with inference page format
+            creation_timestamp = get_best_timestamp(folder_path)
+            creation_date = datetime.fromtimestamp(creation_timestamp).strftime("%d/%m/%Y")
             enriched.append({
                 "name": d["name"],
                 "num_samples": d["num_samples"],

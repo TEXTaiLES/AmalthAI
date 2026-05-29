@@ -1,7 +1,37 @@
 import os
 import csv
+import subprocess
 from datetime import datetime
 from PIL import Image
+
+
+def get_best_timestamp(path):
+    """
+    Prefer filesystem birth time when available; fall back to mtime.
+    """
+    try:
+        stat_result = os.stat(path)
+        birth = getattr(stat_result, "st_birthtime", None)
+        if birth:
+            return birth
+    except OSError:
+        return os.path.getmtime(path)
+
+    try:
+        proc = subprocess.run(
+            ["stat", "-c", "%W", path],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if proc.returncode == 0:
+            value = int(proc.stdout.strip())
+            if value > 0:
+                return value
+    except (ValueError, OSError):
+        pass
+
+    return os.path.getmtime(path)
 
 
 # function to find the registered datasets
@@ -63,7 +93,7 @@ def load_dataset_info(filepath, name, mode):
         ]
 
         num_items = len(image_files)
-        creation_timestamp = os.path.getctime(images_folder)
+        creation_timestamp = get_best_timestamp(images_folder)
         date = datetime.fromtimestamp(creation_timestamp).strftime("%d/%m/%Y")
         
         dataset_info = {
@@ -88,7 +118,7 @@ def load_dataset_info(filepath, name, mode):
         ]
 
         num_items = len(image_files)
-        creation_timestamp = os.path.getctime(images_folder)
+        creation_timestamp = get_best_timestamp(images_folder)
         date = datetime.fromtimestamp(creation_timestamp).strftime("%d/%m/%Y")
         
         dataset_info = {
@@ -123,7 +153,7 @@ def load_dataset_info(filepath, name, mode):
                         })
 
         num_items = len(dataset_items)
-        creation_timestamp = os.path.getctime(dataset_folder)
+        creation_timestamp = get_best_timestamp(dataset_folder)
         date = datetime.fromtimestamp(creation_timestamp).strftime("%d/%m/%Y")
         
         dataset_info = {

@@ -15,7 +15,56 @@ function sortTable(tableId, colIndex) {
 
   const getCellText = (row) => {
     const cell = row.querySelectorAll('td')[colIndex];
-    return cell ? cell.textContent.trim() : '';
+    if (!cell) return '';
+
+    // Prefer explicit sortable value if present
+    const sortValue = cell.getAttribute('data-sort');
+    if (sortValue !== null && sortValue !== undefined && sortValue !== '') {
+      return sortValue.trim();
+    }
+
+    return cell.textContent.trim();
+  };
+
+  const parseDateValue = (text) => {
+    const trimmed = text.trim();
+    if (!trimmed) return 0;
+
+    // Handle YYYY-MM-DD or YYYY/MM/DD
+    const ymdMatch = trimmed.match(/^\s*(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[ T].*)?$/);
+    if (ymdMatch) {
+      const year = Number(ymdMatch[1]);
+      const month = Number(ymdMatch[2]);
+      const day = Number(ymdMatch[3]);
+      if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+        return Date.UTC(year, month - 1, day);
+      }
+    }
+
+    // Handle DD/MM/YYYY or D/M/YYYY explicitly
+    const dmyMatch = trimmed.match(/^\s*(\d{1,2})\/(\d{1,2})\/(\d{4})\s*$/);
+    if (dmyMatch) {
+      const day = Number(dmyMatch[1]);
+      const month = Number(dmyMatch[2]);
+      const year = Number(dmyMatch[3]);
+      if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+        return Date.UTC(year, month - 1, day);
+      }
+    }
+
+    // Handle DD.MM.YYYY
+    const dmyDotMatch = trimmed.match(/^\s*(\d{1,2})\.(\d{1,2})\.(\d{4})\s*$/);
+    if (dmyDotMatch) {
+      const day = Number(dmyDotMatch[1]);
+      const month = Number(dmyDotMatch[2]);
+      const year = Number(dmyDotMatch[3]);
+      if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+        return Date.UTC(year, month - 1, day);
+      }
+    }
+
+    const t = Date.parse(trimmed);
+    return isNaN(t) ? 0 : t;
   };
 
   const parseValue = (text) => {
@@ -25,8 +74,7 @@ function sortTable(tableId, colIndex) {
       return isNaN(n) ? -Infinity : n;
     }
     if (type === 'date') {
-      const t = Date.parse(text);
-      return isNaN(t) ? 0 : t;
+      return parseDateValue(text);
     }
     // default: case-insensitive string
     return text.toLowerCase();
