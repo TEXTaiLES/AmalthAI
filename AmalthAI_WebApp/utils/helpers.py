@@ -4,11 +4,8 @@ import subprocess
 from datetime import datetime
 from PIL import Image
 
-
+# prefer filesystem birth time when available else fall back to mtime.
 def get_best_timestamp(path):
-    """
-    Prefer filesystem birth time when available; fall back to mtime.
-    """
     try:
         stat_result = os.stat(path)
         birth = getattr(stat_result, "st_birthtime", None)
