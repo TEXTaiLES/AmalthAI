@@ -41,8 +41,11 @@ def load_datasets(filepath, mode):
 
         if mode == "Seg":
             images_folder = os.path.join(dataset_folder, "images", "train")
+            val_folder = os.path.join(dataset_folder, "images", "val")
             if os.path.isdir(images_folder) and not name.startswith('.'):
                 num_items = len(os.listdir(images_folder))
+                if os.path.isdir(val_folder):
+                    num_items += len(os.listdir(val_folder))
                 collections.append({
                     "id"         : name,
                     "name"       : name,
@@ -51,8 +54,11 @@ def load_datasets(filepath, mode):
 
         elif mode == "OD":
             images_folder = os.path.join(dataset_folder, "train", "images")
+            val_folder = os.path.join(dataset_folder, "valid", "images")
             if os.path.isdir(images_folder) and not name.startswith('.'):
                 num_items = len(os.listdir(images_folder))
+                if os.path.isdir(val_folder):
+                    num_items += len(os.listdir(val_folder))
                 collections.append({
                     "id"         : name,
                     "name"       : name,
@@ -61,11 +67,17 @@ def load_datasets(filepath, mode):
 
         elif mode == "Cls":
             if os.path.isdir(dataset_folder) and not name.startswith('.'):
+                train_dir = os.path.join(dataset_folder, "train")
+                val_dir = os.path.join(dataset_folder, "val")
+                use_split = os.path.isdir(train_dir) and os.path.isdir(val_dir)
+
                 num_items = 0
-                for cls in os.listdir(dataset_folder):
-                    cls_path = os.path.join(dataset_folder, cls)
-                    if os.path.isdir(cls_path):
-                        num_items += len(os.listdir(cls_path))
+                base_dirs = [train_dir, val_dir] if use_split else [dataset_folder]
+                for base_dir in base_dirs:
+                    for cls in os.listdir(base_dir):
+                        cls_path = os.path.join(base_dir, cls)
+                        if os.path.isdir(cls_path):
+                            num_items += len(os.listdir(cls_path))
                 collections.append({
                     "id"         : name,
                     "name"       : name,
@@ -84,12 +96,19 @@ def load_dataset_info(filepath, name, mode):
 
     if mode == "segmentation":
         images_folder = os.path.join(dataset_folder, "images", "train")
-        image_files = [
+        val_folder = os.path.join(dataset_folder, "images", "val")
+        train_files = [
             f for f in os.listdir(images_folder)
             if os.path.isfile(os.path.join(images_folder, f))
         ]
+        val_files = []
+        if os.path.isdir(val_folder):
+            val_files = [
+                f for f in os.listdir(val_folder)
+                if os.path.isfile(os.path.join(val_folder, f))
+            ]
 
-        num_items = len(image_files)
+        num_items = len(train_files) + len(val_files)
         creation_timestamp = get_best_timestamp(images_folder)
         date = datetime.fromtimestamp(creation_timestamp).strftime("%d/%m/%Y")
         
@@ -102,19 +121,35 @@ def load_dataset_info(filepath, name, mode):
         dataset_items = [
             {
                 "name" : f,
-                "image": os.path.join(images_folder, f)
+                "image": os.path.join(images_folder, f),
+                "split": "train"
             }
-            for f in image_files
+            for f in train_files
+        ]
+        dataset_items += [
+            {
+                "name" : f,
+                "image": os.path.join(val_folder, f),
+                "split": "val"
+            }
+            for f in val_files
         ]
 
     elif mode == "detection":
         images_folder = os.path.join(dataset_folder, "train", "images")
-        image_files = [
+        val_folder = os.path.join(dataset_folder, "valid", "images")
+        train_files = [
             f for f in os.listdir(images_folder)
             if os.path.isfile(os.path.join(images_folder, f))
         ]
+        val_files = []
+        if os.path.isdir(val_folder):
+            val_files = [
+                f for f in os.listdir(val_folder)
+                if os.path.isfile(os.path.join(val_folder, f))
+            ]
 
-        num_items = len(image_files)
+        num_items = len(train_files) + len(val_files)
         creation_timestamp = get_best_timestamp(images_folder)
         date = datetime.fromtimestamp(creation_timestamp).strftime("%d/%m/%Y")
         
@@ -127,27 +162,45 @@ def load_dataset_info(filepath, name, mode):
         dataset_items = [
             {
                 "name" : f,
-                "image": os.path.join(images_folder, f)
+                "image": os.path.join(images_folder, f),
+                "split": "train"
             }
-            for f in image_files
+            for f in train_files
+        ]
+        dataset_items += [
+            {
+                "name" : f,
+                "image": os.path.join(val_folder, f),
+                "split": "val"
+            }
+            for f in val_files
         ]
     
     elif mode == "classification":
         dataset_items = []
         if os.path.isdir(dataset_folder):
-            for cls in os.listdir(dataset_folder):
-                cls_path = os.path.join(dataset_folder, cls)
-                if os.path.isdir(cls_path):
-                    image_files = [
-                        f for f in os.listdir(cls_path)
-                        if os.path.isfile(os.path.join(cls_path, f))
-                    ]
-                    for f in image_files:
-                        dataset_items.append({
-                            "name" : f,
-                            "image": os.path.join(cls_path, f),
-                            "class": cls
-                        })
+            train_dir = os.path.join(dataset_folder, "train")
+            val_dir = os.path.join(dataset_folder, "val")
+            use_split = os.path.isdir(train_dir) and os.path.isdir(val_dir)
+            base_dirs = [(train_dir, "train"), (val_dir, "val")] if use_split else [(dataset_folder, None)]
+
+            for base_dir, split_label in base_dirs:
+                for cls in os.listdir(base_dir):
+                    cls_path = os.path.join(base_dir, cls)
+                    if os.path.isdir(cls_path):
+                        image_files = [
+                            f for f in os.listdir(cls_path)
+                            if os.path.isfile(os.path.join(cls_path, f))
+                        ]
+                        for f in image_files:
+                            item = {
+                                "name" : f,
+                                "image": os.path.join(cls_path, f),
+                                "class": cls
+                            }
+                            if split_label:
+                                item["split"] = split_label
+                            dataset_items.append(item)
 
         num_items = len(dataset_items)
         creation_timestamp = get_best_timestamp(dataset_folder)

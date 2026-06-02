@@ -328,7 +328,7 @@ def conduct_experiment_od(model_selection, timestamp_path, dataset, lr_left, lr_
     # Return the last status type
     return last_status_type
 
-def conduct_experiment_cls(model_selection, timestamp_path, dataset, lr_left, lr_right, bs_left, bs_right, epochs_left, epochs_right, blur, rotate, flip, user_slug):
+def conduct_experiment_cls(model_selection, timestamp_path, dataset, lr_left, lr_right, bs_left, bs_right, epochs_left, epochs_right, blur, rotate, flip, dataset_already_split, user_slug):
     basic_classification_katib_experiment = {
         "apiVersion": "kubeflow.org/v1beta1",
         "kind": "Experiment",
@@ -401,7 +401,8 @@ def conduct_experiment_cls(model_selection, timestamp_path, dataset, lr_left, lr
                                             "--save_path", timestamp_path,
                                             "--blur", blur,
                                             "--rotate", rotate,
-                                            "--flip", flip
+                                            "--flip", flip,
+                                            "--dataset_already_split", str(dataset_already_split).lower()
                                         ],
                                         "volumeMounts": [
                                             {"mountPath": "/dev/shm", "name": "shm"},
@@ -446,7 +447,8 @@ def conduct_experiment_cls(model_selection, timestamp_path, dataset, lr_left, lr
         "--save_path", timestamp_path,
         "--blur", str(blur).lower(),
         "--rotate", str(rotate).lower(),
-        "--flip", str(flip).lower()
+        "--flip", str(flip).lower(),
+        "--dataset_already_split", str(dataset_already_split).lower()
     ]
 
     exp_dir = os.path.join(BASE_HOST_PATH, user_slug, "exps")

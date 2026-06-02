@@ -100,6 +100,13 @@ parser.add_argument(
     help="Apply flip augmentation"
 )
 
+parser.add_argument(
+    "--dataset_already_split",
+    type=str,
+    default="false",
+    help="Dataset already split into train/val"
+)
+
 # Sanity checks and parsing
 args = parser.parse_args()
 model_selection = args.model
@@ -117,6 +124,7 @@ epoch_left = args.epoch_left
 blur = args.blur
 rotate = args.rotate
 flip = args.flip
+dataset_already_split = args.dataset_already_split
 
 def get_timestamp_path():
     now = datetime.datetime.now()
@@ -133,7 +141,7 @@ if model_selection == "allmodels":
     all_success = True  # flag
 
     for model in models_list:
-        res = conduct_experiment_cls(model, timestamp_path, dataset, lr_left, lr_right, bs_left, bs_right, epoch_left, epoch_right, blur, rotate, flip, user_slug)
+        res = conduct_experiment_cls(model, timestamp_path, dataset, lr_left, lr_right, bs_left, bs_right, epoch_left, epoch_right, blur, rotate, flip, dataset_already_split, user_slug)
         print(f"Last condition for {model}: {res}")
 
         if res != "Succeeded":
@@ -142,7 +150,7 @@ if model_selection == "allmodels":
     final_res = "Succeeded" if all_success else "Failed"
 
 else:
-    final_res = conduct_experiment_cls(model_selection, timestamp_path, dataset, lr_left, lr_right, bs_left, bs_right, epoch_left, epoch_right, blur, rotate, flip, user_slug)
+    final_res = conduct_experiment_cls(model_selection, timestamp_path, dataset, lr_left, lr_right, bs_left, bs_right, epoch_left, epoch_right, blur, rotate, flip, dataset_already_split, user_slug)
     print(f"Last condition for {model_selection}: {final_res}")
 
 

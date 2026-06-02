@@ -482,28 +482,82 @@ def process_dataset(mode, zip_path, num_classes=None, user_slug=None):
             return False, f"Val mismatch. Images missing labels: {missing_labels}, labels missing images: {missing_images}"
 
     elif mode == "classification":
-        subdirs = [
-            d for d in os.listdir(tmp_dir)
-            if os.path.isdir(os.path.join(tmp_dir, d))
-        ]
-        if len(subdirs) != int(num_classes):
-            shutil.rmtree(os.path.dirname(tmp_dir), ignore_errors=True)
-            return False, f"Expected {num_classes} class folders, found {len(subdirs)}"
-    
-        for cls in subdirs:
-            cls_path = os.path.join(tmp_dir, cls)
-            contents = os.listdir(cls_path)
+        def validate_class_dir(root_dir, split_label):
+            if not os.path.isdir(root_dir):
+                return False, f"Missing '{split_label}' folder"
 
-            # Must NOT be empty
-            if len(contents) == 0:
+            subdirs = [
+                d for d in os.listdir(root_dir)
+                if os.path.isdir(os.path.join(root_dir, d))
+            ]
+
+            if len(subdirs) != int(num_classes):
+                return False, f"Expected {num_classes} class folders in '{split_label}', found {len(subdirs)}"
+
+            for cls in subdirs:
+                cls_path = os.path.join(root_dir, cls)
+                contents = os.listdir(cls_path)
+
+                # Must NOT be empty
+                if len(contents) == 0:
+                    return False, f"Class '{cls}' in '{split_label}' is empty"
+
+                # Must NOT contain directories
+                for item in contents:
+                    if os.path.isdir(os.path.join(cls_path, item)):
+                        return False, (
+                            f"Class '{cls}' in '{split_label}' contains a folder ('{item}') "
+                            "but only image files are allowed"
+                        )
+
+            return True, set(subdirs)
+
+        train_dir = os.path.join(tmp_dir, "train")
+        val_dir = os.path.join(tmp_dir, "val")
+        dataset_already_split = os.path.isdir(train_dir) and os.path.isdir(val_dir)
+
+        if dataset_already_split:
+            ok, train_classes = validate_class_dir(train_dir, "train")
+            if not ok:
                 shutil.rmtree(os.path.dirname(tmp_dir), ignore_errors=True)
-                return False, f"Class '{cls}' is empty"
+                return False, train_classes
 
-            # Must NOT contain directories
-            for item in contents:
-                if os.path.isdir(os.path.join(cls_path, item)):
+            ok, val_classes = validate_class_dir(val_dir, "val")
+            if not ok:
+                shutil.rmtree(os.path.dirname(tmp_dir), ignore_errors=True)
+                return False, val_classes
+
+            if train_classes != val_classes:
+                shutil.rmtree(os.path.dirname(tmp_dir), ignore_errors=True)
+                missing_train = val_classes - train_classes
+                missing_val = train_classes - val_classes
+                return False, (
+                    "Train/val class mismatch. "
+                    f"Missing in train: {missing_train}, missing in val: {missing_val}"
+                )
+        else:
+            subdirs = [
+                d for d in os.listdir(tmp_dir)
+                if os.path.isdir(os.path.join(tmp_dir, d))
+            ]
+            if len(subdirs) != int(num_classes):
+                shutil.rmtree(os.path.dirname(tmp_dir), ignore_errors=True)
+                return False, f"Expected {num_classes} class folders, found {len(subdirs)}"
+    
+            for cls in subdirs:
+                cls_path = os.path.join(tmp_dir, cls)
+                contents = os.listdir(cls_path)
+
+                # Must NOT be empty
+                if len(contents) == 0:
                     shutil.rmtree(os.path.dirname(tmp_dir), ignore_errors=True)
-                    return False, f"Class '{cls}' contains a folder ('{item}') but only image files are allowed"
+                    return False, f"Class '{cls}' is empty"
+
+                # Must NOT contain directories
+                for item in contents:
+                    if os.path.isdir(os.path.join(cls_path, item)):
+                        shutil.rmtree(os.path.dirname(tmp_dir), ignore_errors=True)
+                        return False, f"Class '{cls}' contains a folder ('{item}') but only image files are allowed"
 
     else:
         return False, "Unknown mode"
@@ -813,6 +867,13 @@ def train_model_submit():
     ]
 
     # Classification command
+    cls_split_flag = False
+    if mode == "classification" and selected_collection:
+        dataset_root = os.path.join(user_root(user_slug), "Datasets", "Classification", selected_collection)
+        train_dir = os.path.join(dataset_root, "train")
+        val_dir = os.path.join(dataset_root, "val")
+        cls_split_flag = os.path.isdir(train_dir) and os.path.isdir(val_dir)
+
     cls_cmd = [
         "python", "training_button_classification.py",
         "--user", user_slug,
@@ -820,6 +881,7 @@ def train_model_submit():
         "--blur", bool_str(blur_enabled),
         "--rotate", bool_str(rotate_enabled),
         "--flip", bool_str(flip_enabled),
+        "--dataset_already_split", bool_str(cls_split_flag),
     ]
 
     # Detection command
