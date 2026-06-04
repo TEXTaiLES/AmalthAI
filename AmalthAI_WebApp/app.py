@@ -605,9 +605,9 @@ def dataset_submit():
 @login_required
 def train_model():
     # Models
-    seg_models = load_models_available('data/models_available_segmentation.csv')
-    cls_models = load_models_available('data/models_available_classification.csv')
-    od_models  = load_models_available('data/models_available_object_detection.csv')
+    seg_models = load_models_available('static/models_available/models_available_segmentation.csv')
+    cls_models = load_models_available('static/models_available/models_available_classification.csv')
+    od_models  = load_models_available('static/models_available/models_available_object_detection.csv')
 
     models = {
         "segmentation"  : seg_models,
@@ -637,7 +637,8 @@ def train_model():
             "lower"    : 0.00001,
             "upper"    : 0.1,
             "lower_def": config.get('defaults').get('lr_lower'),
-            "upper_def": config.get('defaults').get('lr_upper')
+            "upper_def": config.get('defaults').get('lr_upper'),
+            "description": "Controls the step size for model weight updates during training. Higher values train faster but may miss optimal solutions."
         },
         "batch_size": {
             "range"    : "discrete",
@@ -645,7 +646,8 @@ def train_model():
             "lower"    : 1,
             "upper"    : 64,
             "lower_def": config.get('defaults').get('bs_lower'),
-            "upper_def": config.get('defaults').get('bs_upper')
+            "upper_def": config.get('defaults').get('bs_upper'),
+            "description": "Number of samples processed in each training iteration. Larger batches are more stable but require more memory."
         },
         "epochs": {
             "range"    : "continuous",
@@ -655,7 +657,8 @@ def train_model():
             "lower"    : 1,
             "upper"    : 100,
             "lower_def": config.get('defaults').get('ep_lower'),
-            "upper_def": config.get('defaults').get('ep_upper')
+            "upper_def": config.get('defaults').get('ep_upper'),
+            "description": "Number of complete passes through the training dataset. More epochs allow deeper learning but risk overfitting."
         },
     }
 
@@ -663,33 +666,40 @@ def train_model():
         "segmentation": {
             "blur"  : {
                 "type"   : "bool",
-                "default": config.get('defaults').get('seg_blur')
+                "default": config.get('defaults').get('seg_blur'),
+                "description": "Applies Gaussian blur to simulate motion or focus blur in images."
             },
             "scale" : {
                 "type": "bool",
-                "default": config.get('defaults').get('seg_scale')
+                "default": config.get('defaults').get('seg_scale'),
+                "description": "Randomly scales images to different sizes for improved robustness."
             },
             "rotate": {
                 "type": "bool",
-                "default": config.get('defaults').get('seg_rotate')
+                "default": config.get('defaults').get('seg_rotate'),
+                "description": "Randomly rotates images to improve generalization to different orientations."
             },
             "flip"  : {
                 "type"   : "bool",
-                "default": config.get('defaults').get('seg_flip')
+                "default": config.get('defaults').get('seg_flip'),
+                "description": "Flips images horizontally or vertically for spatial invariance."
             }
         },
         "classification": {
             "blur"  : {
                 "type"   : "bool",
-                "default": config.get('defaults').get('cls_blur')
+                "default": config.get('defaults').get('cls_blur'),
+                "description": "Applies Gaussian blur to simulate motion or focus blur in images."
             },
             "rotate": {
                 "type"   : "bool",
-                "default": config.get('defaults').get('cls_rotate')
+                "default": config.get('defaults').get('cls_rotate'),
+                "description": "Randomly rotates images to improve generalization to different orientations."
             },
             "flip"  : {
                 "type"   : "bool",
-                "default": config.get('defaults').get('cls_flip')
+                "default": config.get('defaults').get('cls_flip'),
+                "description": "Flips images horizontally or vertically for spatial invariance."
             }
         },
         "detection": {
@@ -700,7 +710,8 @@ def train_model():
                 # "prob_default"   : 0.2,
                 "max_val_range"  : [0.005, 0.01, 0.015, 0.02, 0.025, 0.03],
                 "max_val_default": config.get('defaults').get('det_hue'),
-                "unit"           : None
+                "unit"           : None,
+                "description": "Adjusts color hue to simulate different lighting conditions and improve color robustness."
             },
             "saturation": {
                 "type"           : "range",
@@ -709,7 +720,8 @@ def train_model():
                 # "prob_default"   : 0.2,
                 "max_val_range"  : [0.0, 0.2, 0.4, 0.6, 0.8, 1],
                 "max_val_default": config.get('defaults').get('det_sat'),
-                "unit"           : None
+                "unit"           : None,
+                "description": "Modifies color saturation to improve the model's invariance to color variations."
             },
             "value": {
                 "type"           : "range",
@@ -718,14 +730,16 @@ def train_model():
                 # "prob_default"   : 0.2,
                 "max_val_range"  : [0.0, 0.2, 0.4, 0.6, 0.8, 1],
                 "max_val_default": config.get('defaults').get('det_val'),
-                "unit"           : None
+                "unit"           : None,
+                "description": "Changes brightness values to handle varying illumination and improve brightness robustness."
             },
             "flip": {
                 "type"           : "range",
                 "default"        : True,
                 "prob_range"     : [0.0, 0.2, 0.4, 0.6, 0.8, 1],
                 "prob_default"   : config.get('defaults').get('det_flip'),
-                "unit"           : None
+                "unit"           : None,
+                "description": "Randomly flips images horizontally with specified probability for spatial invariance."
             },
             "rotate": {
                 "type"           : "range",
@@ -734,7 +748,8 @@ def train_model():
                 # "prob_default"   : 0.2,
                 "max_val_range"  : [0, 30, 60, 90, 120, 150, 180],
                 "max_val_default": config.get('defaults').get('det_rotate'),
-                "unit"           : "degrees"
+                "unit"           : "degrees",
+                "description": "Randomly rotates images within specified angle range to improve rotational invariance."
             },
         }
     }

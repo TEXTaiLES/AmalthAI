@@ -43,6 +43,7 @@
                             <tr>
                                 <th>Model Name</th>
                                 <th>Input Type</th>
+                                <th>Info</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -50,6 +51,11 @@
                             <tr>
                                 <td><a href="{{model.url}}" target="_blank">{{ model.name }}</a></td>
                                 <td>2D Images</td>
+                                <td>
+                                    <span class="d-inline-block" data-bs-toggle="tooltip" data-bs-placement="left" title="{{ model.description }}">
+                                        <i class="bi bi-info-circle" style="cursor: help; font-size: 0.9rem; color: #6c757d;"></i>
+                                    </span>
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -88,7 +94,7 @@
             <!-- Spinner shown while training request is in progress -->
             <div id="trainSpinner" class="d-none text-center mt-3">
                 <div class="spinner-border text-success" role="status" aria-hidden="true"></div>
-                <div class="small mt-2">Starting training… this may take a while</div>
+                <div class="small mt-2">Starting training… this may take a while.</div>
             </div>
 
         </div>
@@ -111,7 +117,12 @@
                         {% set upper_default = config.upper_def if config.upper_def is defined else (config.upper if config.upper is defined else '') %}
                         <div class="mb-3">
 
-                            <label class="form-label text-capitalize">{{ param.replace('_',' ') }}</label>
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <label class="form-label text-capitalize mb-0">{{ param.replace('_',' ') }}</label>
+                                <span class="d-inline-block" data-bs-toggle="tooltip" data-bs-placement="right" title="{{ config.description }}">
+                                    <i class="bi bi-info-circle" style="cursor: help; font-size: 0.9rem; color: #6c757d;"></i>
+                                </span>
+                            </div>
 
                             <div class="row g-2 align-items-center">
 
@@ -138,7 +149,7 @@
                                 </div>
 
                                 <div class="col-auto text-center">
-                                    ≤
+                                    -
                                 </div>
 
                                 <!-- UPPER -->
@@ -209,10 +220,11 @@
 
                             {% if config.type == "bool" %}
                                 <!-- Boolean augmentations have no further controls -->
-                                <small class="text-muted">Enable or disable this augmentation.</small>
+                                <small class="text-muted">{{ config.description }}</small>
 
                             {% elif config.type == "range" %}
                                 <!-- Probability -->
+                                <small class="text-muted d-block mb-2">{{ config.description }}</small>
                                 {% if config.prob_range %}
                                 <div class="mb-2">
                                     <label class="form-label small mb-1">Probability</label>
@@ -285,4 +297,13 @@
 </div>
 
 <script src="{{ url_for('static', filename='js/param_validation.js') }}"></script>
+<script>
+    // Initialize Bootstrap tooltips for advanced options info icons
+    document.addEventListener('DOMContentLoaded', function() {
+        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    });
+</script>
 {% endblock %}

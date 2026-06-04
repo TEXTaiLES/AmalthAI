@@ -1,0 +1,5 @@
+id,name,url,description
+ResNet18,ResNet18,https://arxiv.org/abs/1512.03385,A deep residual network that's accurate and versatile. Best for high-accuracy classification when computational power is available.
+EfficientNetB0,EfficientNetB0,https://arxiv.org/abs/1905.11946,A highly efficient model that balances accuracy and speed. Ideal for resource-constrained environments and mobile deployment.
+MobileNetV2,MobileNetV2,https://arxiv.org/abs/1801.04381,Lightweight model optimized for mobile and edge devices. Great for real-time classification with minimal memory footprint.
+ShuffleNetV2,ShuffleNetV2,https://arxiv.org/abs/1807.11164,Ultra-efficient model designed for mobile platforms. Fastest option when latency is critical.

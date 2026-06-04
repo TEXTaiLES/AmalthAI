@@ -1,0 +1,3 @@
+id,name,url,description
+YOLOv11,YOLOv11,https://docs.ultralytics.com/models/yolo11/,Latest YOLO version with improved accuracy and speed. Recommended for state-of-the-art real-time detection performance.
+YOLOv8,YOLOv8,https://docs.ultralytics.com/models/yolov8/,Proven and stable version with excellent real-time performance. Good choice for production systems with proven reliability.

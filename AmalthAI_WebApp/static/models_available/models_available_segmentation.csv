@@ -1,0 +1,5 @@
+id,name,url,description
+UNetlight,UNetlight,https://arxiv.org/abs/1505.04597,Lightweight UNet variant for fast inference with good accuracy. Perfect for real-time segmentation on resource-limited devices.
+UNet,UNet,https://arxiv.org/abs/1505.04597,Classic encoder-decoder architecture excellent for medical and general image segmentation. Balanced performance for most use cases.
+Deeplabv3plus,DeeplabV3+,https://arxiv.org/abs/1802.02611,State-of-the-art dilated convolution model for high-quality segmentation. Best choice when accuracy is paramount.
+PSPNet,PSPNet,https://arxiv.org/abs/1612.01105,Pyramid pooling network that captures multi-scale context. Great for complex scenes with objects at different scales.
