@@ -20,7 +20,6 @@
             <!-- Left content -->
             <div class="col-lg-8 d-flex flex-column justify-content-start">
                 <p class="mb-4">
-                    <!-- Add Text -->
                     {% if mode == "classification" %}
                     {% elif mode == "segmentation" %}
                     {% elif mode == "detection" %}
@@ -59,7 +58,7 @@
             <input type="hidden" id="mode" name="mode" value="{{ mode }}">
             <div class="col-lg-4">
                 {% if mode == "classification" %} 
-                <div class="card">
+                <div class="card mb-3">
                     <div class="card-body">
                         <!-- Number of Classes -->
                         <div class="mb-3">
@@ -87,6 +86,70 @@
                     </div>
                 </div>
                 {% endif %}
+
+                <div class="card shadow-sm overflow-hidden border">
+                    <div class="card-header bg-light">
+                        <h6 class="mb-0"><i class="bi bi-folder2-open me-2"></i>Dataset Structure</h6>
+                    </div>
+                    <div class="card-body">
+                        <p class="small text-muted mb-3">The uploaded .zip file must follow this exact directory structure:</p>
+                        
+                        {% if mode == "classification" %}
+                        <pre class="bg-light p-3 rounded small" style="font-size: 0.8rem; overflow-x: auto;"><code>DatasetName/
+├── train/
+│   ├── class_1/
+│   │   ├── img1.jpg
+│   │   └── ...
+│   └── class_2/
+│       └── ...
+└── val/
+    ├── class_1/
+    │   ├── imgX.jpg
+    │   └── ...
+    └── class_2/
+        └── ...</code></pre>
+                        <p class="small text-muted mt-2 mb-0">Note: You can also upload a flat structure (only class folders inside <code>DatasetName/</code>) and the platform will automatically perform a 70% train / 30% val split.</p>
+                        
+                        {% elif mode == "segmentation" %}
+                        <pre class="bg-light p-3 rounded small" style="font-size: 0.8rem; overflow-x: auto;"><code>DatasetName/
+├── images/
+│   ├── train/
+│   │   ├── image_001.jpg
+│   │   └── ...
+│   └── val/
+│       ├── image_101.jpg
+│       └── ...
+├── masks/
+│   ├── train/
+│   │   ├── image_001.png
+│   │   └── ...
+│   └── val/
+│       ├── image_101.png
+│       └── ...
+└── labelmap.txt</code></pre>
+                        <p class="small text-muted mt-2 mb-0">Export Format Required: <strong>Segmentation Mask 1.1</strong> from CVAT.</p>
+                        
+                        {% elif mode == "detection" %}
+                        <pre class="bg-light p-3 rounded small" style="font-size: 0.8rem; overflow-x: auto;"><code>DatasetName/
+├── train/
+│   ├── images/
+│   │   ├── image_001.jpg
+│   │   └── ...
+│   └── labels/
+│       ├── image_001.txt
+│       └── ...
+├── valid/
+│   ├── images/
+│   │   ├── image_101.png
+│   │   └── ...
+│   └── labels/
+│       ├── image_101.txt
+│       └── ...
+└── data.yaml</code></pre>
+                        <p class="small text-muted mt-2 mb-0">Export Format Required: <strong>Ultralytics YOLO Detection 1.0</strong> from CVAT.</p>
+                        {% endif %}
+                    </div>
+                </div>
             </div>
         </div>
     </form>
