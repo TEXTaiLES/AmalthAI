@@ -182,6 +182,7 @@
 
                         </div>
                         {% endfor %}
+                        <p class="text-muted small mb-3">For more information about training parameters <a href="https://textailes.github.io/AmalthAI-documentation/manual/training_params/" target="_blank">click here</a>.</p>
                     </div>
 
                 </div>
@@ -203,11 +204,15 @@
 
                             <!-- Header line: Aug name and enable switch -->
                             <div class="d-flex justify-content-between align-items-center mb-2">
-                                <label class="form-label text-capitalize mb-0">
-                                    {{ aug.replace('_',' ') }}
-                                </label>
-
-                                <!-- Enable/Disable switch -->
+                                <div class="d-flex align-items-center gap-2">
+                                    <label class="form-label text-capitalize mb-0">
+                                        {{ aug.replace('_',' ') }}
+                                    </label>
+                                    
+                                    <span class="d-inline-block" data-bs-toggle="tooltip" data-bs-placement="right" title="{{ config.description }}">
+                                        <i class="bi bi-info-circle" style="cursor: help; font-size: 0.9rem; color: #6c757d;"></i>
+                                    </span>
+                                </div>
                                 <div class="form-check form-switch">
                                     <input class="form-check-input aug-enable"
                                         type="checkbox"
@@ -219,12 +224,7 @@
                             </div>
 
                             {% if config.type == "bool" %}
-                                <!-- Boolean augmentations have no further controls -->
-                                <small class="text-muted">{{ config.description }}</small>
-
-                            {% elif config.type == "range" %}
-                                <!-- Probability -->
-                                <small class="text-muted d-block mb-2">{{ config.description }}</small>
+                                {% elif config.type == "range" %}
                                 {% if config.prob_range %}
                                 <div class="mb-2">
                                     <label class="form-label small mb-1">Probability</label>
@@ -287,7 +287,7 @@
 
                         </div>
                         {% endfor %}
-
+                        <p class="text-muted small mb-3">For more information about augmentations <a href="https://textailes.github.io/AmalthAI-documentation/manual/training_params/" target="_blank">click here</a>.</p>
                     </div>
 
                 </div>

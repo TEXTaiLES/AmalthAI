@@ -638,7 +638,7 @@ def train_model():
             "upper"    : 0.1,
             "lower_def": config.get('defaults').get('lr_lower'),
             "upper_def": config.get('defaults').get('lr_upper'),
-            "description": "Controls the step size for model weight updates during training. Higher values train faster but may miss optimal solutions."
+            "description": "Controls how fast the AI tries to learn from its mistakes. Think of it like adjusting your aim in darts: a big learning rate means making huge corrections, while a small one means making tiny, careful adjustments."
         },
         "batch_size": {
             "range"    : "discrete",
@@ -647,7 +647,7 @@ def train_model():
             "upper"    : 64,
             "lower_def": config.get('defaults').get('bs_lower'),
             "upper_def": config.get('defaults').get('bs_upper'),
-            "description": "Number of samples processed in each training iteration. Larger batches are more stable but require more memory."
+            "description": "The number of examples the model processes at the same time before updating its knowledge."
         },
         "epochs": {
             "range"    : "continuous",
@@ -658,7 +658,7 @@ def train_model():
             "upper"    : 100,
             "lower_def": config.get('defaults').get('ep_lower'),
             "upper_def": config.get('defaults').get('ep_upper'),
-            "description": "Number of complete passes through the training dataset. More epochs allow deeper learning but risk overfitting."
+            "description": "How many times the AI reads through the entire set of examples. One epoch means the AI has seen every single training image exactly once."
         },
     }
 
