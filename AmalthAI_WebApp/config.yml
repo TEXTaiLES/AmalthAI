@@ -10,6 +10,14 @@ images:
 kubeflow:
   namespace: kubeflow
 
+# HESTIA data-lake integration. base_url here is a fallback for bare-metal runs;
+# in Docker the HESTIA_BASE_URL / HESTIA_API_KEY env vars (docker-compose) win.
+# Use http://api:5000 when co-located on one Docker host, or the public
+# https://api.textailes.athenarc.gr when AmalthAI and HESTIA are on different hosts.
+hestia:
+  enabled: true
+  base_url: https://api.textailes.athenarc.gr
+
 defaults:
   pager_size: 30
   lr_lower: 0.001
