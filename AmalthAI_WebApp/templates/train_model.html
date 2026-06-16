@@ -21,11 +21,11 @@
         <div class="col-lg-8 d-flex flex-column justify-content-start">
             <p class="mb-4">
                 {% if mode == "classification" %}
-                    This task performs image classification into predefined categories. It is ideal when each image must receive a single label.
+                    This task assigns a category label to the entire image from a predefined set of classes. It is ideal when the goal is to identify the primary object, scene, or concept present in an image.
                 {% elif mode == "segmentation" %}
-                    This task generates pixel-wise masks for regions of interest in the image. It is ideal when detailed spatial understanding is required.
+                    This task predicts a pixel-level mask for each region of interest in the image. It is ideal when precise object boundaries and detailed spatial understanding are required.
                 {% elif mode == "detection" %}
-                    This task detects regions of interest and produces bounding boxes. It is suitable when you need to find and localize multiple regions of interest without requiring exact shapes.
+                    This task locates and classifies objects within an image by predicting bounding boxes and category labels. It is ideal when multiple objects may be present and their positions need to be identified.
                 {% endif %}
             </p>
             <p class="mb-4">Use the options below to configure your model training and view parameters.</p>
