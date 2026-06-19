@@ -210,6 +210,15 @@ def extract_archive(archive_path, dest_root):
 # --------------------------------------------------------------------------- #
 # Datasets
 # --------------------------------------------------------------------------- #
+def list_datasets(owner_slug, mode=None):
+    """Return dataset rows, or None if HESTIA is unreachable (vs [] when empty)."""
+    params = {"owner_slug": owner_slug}
+    if mode:
+        params["mode"] = mode
+    rows = _get("/amalthai/datasets", params)
+    return rows if isinstance(rows, list) else None
+
+
 def find_dataset(owner_slug, mode, name):
     rows = _get("/amalthai/datasets",
                 {"owner_slug": owner_slug, "mode": mode, "name": name})

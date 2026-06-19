@@ -373,6 +373,11 @@ def dataset():
         "classification": f"{user_datasets_root}/Classification/"
     }
 
+    # HESTIA: rehydrate the dataset into the local cache so a dataset that lives
+    # only in the data lake (not cached on this node) can still be viewed.
+    if HESTIA_ENABLED:
+        hc.ensure_dataset_local(user_slug, mode, name, dataset_path[mode])
+
     dataset_info, dataset_items = load_dataset_info(
         filepath = dataset_path[mode],
         name     = name,
@@ -408,6 +413,47 @@ def dataset():
 
 
 
+def _merged_datasets(user_slug, mode, mode_short):
+    """Datasets for the UI = local cache ∪ HESTIA (authoritative), keyed by name.
+
+    Local entries keep their on-disk sample count + folder date. HESTIA-only
+    datasets (not cached on this node) are still listed and selectable; training
+    or viewing rehydrates them on demand. Falls back to local-only if HESTIA is
+    unreachable, so nothing (incl. legacy local-only datasets) ever disappears.
+    """
+    base = os.path.join(user_root(user_slug), "Datasets", HESTIA_DATASET_DIR[mode])
+    out = {}
+    for d in load_datasets(base, mode_short):
+        folder = os.path.join(base, d["id"])
+        try:
+            date = datetime.fromtimestamp(get_best_timestamp(folder)).strftime("%d/%m/%Y")
+        except Exception:
+            date = ""
+        out[d["name"]] = {"id": d["name"], "name": d["name"],
+                          "num_samples": d["num_samples"], "type": "2D images",
+                          "date": date, "cached": True}
+
+    if HESTIA_ENABLED:
+        rows = hc.list_datasets(user_slug, mode)
+        if rows is not None:  # None => HESTIA unreachable; keep local-only
+            for r in rows:
+                name = r.get("name")
+                if not name or name in out:
+                    continue
+                counts = (r.get("manifest") or {}).get("counts") or {}
+                num = sum(v for v in counts.values() if isinstance(v, int)) or "—"
+                date = ""
+                if r.get("created_at"):
+                    try:
+                        date = datetime.fromisoformat(r["created_at"]).strftime("%d/%m/%Y")
+                    except Exception:
+                        date = ""
+                out[name] = {"id": name, "name": name, "num_samples": num,
+                             "type": "2D images", "date": date, "cached": False}
+
+    return sorted(out.values(), key=lambda d: str(d["name"]).lower())
+
+
 # Datasets page showing all available datasets with metadata
 @app.route('/collections')
 @login_required
@@ -416,28 +462,9 @@ def collections():
     user_slug = get_current_user_slug()
     user_datasets_root = os.path.join(user_root(user_slug), "Datasets")
 
-    seg_datasets = load_datasets(f"{user_datasets_root}/Segmentation", "Seg")
-    od_datasets  = load_datasets(f"{user_datasets_root}/Object-Detection", "OD")
-    cls_datasets = load_datasets(f"{user_datasets_root}/Classification", "Cls")
-
-    def enrich(datasets, base_path):
-        enriched = []
-        for d in datasets:
-            folder_path = os.path.join(base_path, d["id"])
-            creation_timestamp = get_best_timestamp(folder_path)
-            creation_date = datetime.fromtimestamp(creation_timestamp).strftime("%d/%m/%Y")
-            enriched.append({
-                "name": d["name"],
-                "num_samples": d["num_samples"],
-                "type": "2D images",
-                "date": creation_date,
-                "url": "/dataset"
-            })
-        return enriched
-
-    seg_datasets = enrich(seg_datasets, f"{user_datasets_root}/Segmentation")
-    od_datasets  = enrich(od_datasets, f"{user_datasets_root}/Object-Detection")
-    cls_datasets = enrich(cls_datasets, f"{user_datasets_root}/Classification")
+    seg_datasets = _merged_datasets(user_slug, "segmentation", "Seg")
+    od_datasets  = _merged_datasets(user_slug, "detection", "OD")
+    cls_datasets = _merged_datasets(user_slug, "classification", "Cls")
 
     datasets = {
         "segmentation"  : seg_datasets,
@@ -760,9 +787,9 @@ def train_model():
     user_slug = get_current_user_slug()
     user_datasets_root = os.path.join(user_root(user_slug), "Datasets")
 
-    od_collections  = load_datasets(f"{user_datasets_root}/Object-Detection","OD")
-    seg_collections = load_datasets(f"{user_datasets_root}/Segmentation","Seg")
-    cls_collections = load_datasets(f"{user_datasets_root}/Classification","Cls")
+    od_collections  = _merged_datasets(user_slug, "detection", "OD")
+    seg_collections = _merged_datasets(user_slug, "segmentation", "Seg")
+    cls_collections = _merged_datasets(user_slug, "classification", "Cls")
 
     collections = {
         "segmentation"  : seg_collections,
