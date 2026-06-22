@@ -5,7 +5,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const modelSelect = document.getElementById("modelSelect");
     const collectionSelect = document.getElementById("collectionSelect");
 
-    const mode = document.getElementById("mode").value;
+    const modeInput = document.getElementById("mode");
+    const mode = modeInput ? modeInput.value : "segmentation";
 
     // Collect all advanced inputs (note: template uses classes 'adv-lower' / 'adv-upper')
     const lowerInputs = [...document.querySelectorAll(".adv-lower")];
@@ -166,6 +167,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const formData = new FormData();
 
         formData.append("mode", mode);
+        localStorage.setItem("trainingMode", mode);
         formData.append("model", modelSelect.value);
         formData.append("collection", collectionSelect.value);
 
@@ -232,6 +234,7 @@ document.addEventListener("DOMContentLoaded", () => {
     //----------------------------------------------------------------------
 
     const statusBox = document.getElementById("trainStatus");
+    const trainingMode = localStorage.getItem("trainingMode") || mode;
     let pollTimer = null;
 
     function renderStatus(text, type) {
@@ -291,22 +294,24 @@ document.addEventListener("DOMContentLoaded", () => {
                     if (data.status === "succeeded") {
                         renderStatus("Training completed. Check Models for results.", "alert-success");
                         localStorage.removeItem("trainingJobId");
+                        localStorage.removeItem("trainingMode");
                         spinner && spinner.classList.add("d-none");
                         setTrainingLocked(false);
                         stopPolling();
                         const msg = encodeURIComponent("Training finished successfully!");
-                        window.location.href = `/models?msg=${msg}&msg_type=info`;
+                        window.location.href = `/models?mode=${encodeURIComponent(trainingMode)}&msg=${msg}&msg_type=info`;
                         return;
                     }
 
                     if (data.status === "failed") {
                         renderStatus("Training failed. Check logs for details.", "alert-danger");
                         localStorage.removeItem("trainingJobId");
+                        localStorage.removeItem("trainingMode");
                         spinner && spinner.classList.add("d-none");
                         setTrainingLocked(false);
                         stopPolling();
                         const msg = encodeURIComponent("Training failed. Check logs for details.");
-                        window.location.href = `/models?msg=${msg}&msg_type=danger`;
+                        window.location.href = `/models?mode=${encodeURIComponent(trainingMode)}&msg=${msg}&msg_type=danger`;
                     }
                 })
                 .catch(err => {
