@@ -10,6 +10,13 @@ images:
 kubeflow:
   namespace: kubeflow
 
+directus:
+  base_url: DIRECTUS_URL
+
+hestia:
+  enabled: true
+  base_url: HESTIA_URL
+
 defaults:
   pager_size: 30
   lr_lower: 0.001
@@ -33,4 +40,3 @@ defaults:
   det_val: 0.4
   det_flip: 0.4
   det_rotate: 0.0
-

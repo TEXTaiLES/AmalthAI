@@ -12,13 +12,15 @@ services:
       - /home/user/.kube/:/root/.kube/
     environment:
       - KUBECONFIG=/root/.kube/config
+      - HESTIA_BASE_URL= HESTIA_URL
+      - HESTIA_API_KEY= API_KEY
     ports:
       - "8056:8056"
     networks:
       - textailes
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.amalthai.rule=Host(`amalthai.textailes.athenarc.gr`)"
+      - "traefik.http.routers.amalthai.rule=Host(`AMALTHAI_URL`)"
       - "traefik.http.routers.amalthai.entrypoints=websecure"
       - "traefik.http.routers.amalthai.tls.certresolver=le"
     restart: "always"

@@ -14,6 +14,7 @@ import uuid
 from utils.models_page import write_results
 from utils.helpers import load_datasets, load_models_available, load_dataset_info, get_max_image_size, load_models, get_best_timestamp
 from utils.load_config import load_config
+from utils import hestia_client as hc
 import docker
 import zipfile
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
@@ -52,7 +53,7 @@ def login():
         username = request.form.get("username")
         password = request.form.get("password")
         
-        DIRECTUS_URL = "http://textailes.athenarc.gr"
+        DIRECTUS_URL = config.get("directus", {}).get("base_url")
         resp = requests.post(
             f"{DIRECTUS_URL}/auth/login",
             json={
@@ -95,6 +96,24 @@ BASE_HOST_PATH_OUT      = config.get("paths").get("base_host_path_out")
 IMAGE_SEGM_CLS  = config.get("images").get("classification")
 IMAGE_OD        = config.get("images").get("detection")
 
+# HESTIA data-lake integration: feature flag + client base-url fallback from config.
+# (HESTIA_BASE_URL / HESTIA_API_KEY env, set by docker-compose, take precedence.)
+HESTIA_ENABLED = bool(config.get("hestia", {}).get("enabled"))
+hc.configure(base_url=config.get("hestia", {}).get("base_url"))
+
+# Per-mode constants used by the HESTIA hooks.
+HESTIA_METRIC = {
+    "segmentation": "mIoU Score",
+    "detection": "mAP 50-95 Score",
+    "classification": "Accuracy",
+}
+# AmalthAI dataset directories.
+HESTIA_DATASET_DIR = {
+    "segmentation": "Segmentation",
+    "detection": "Object-Detection",
+    "classification": "Classification",
+}
+
 
 def safe_user_slug(email):
     base = email.split("@", 1)[0].strip().lower()
@@ -108,6 +127,10 @@ def user_root(slug):
 def get_current_user_slug():
     slug = getattr(current_user, "slug", None)
     return slug or "guest"
+
+
+def get_current_user_email():
+    return getattr(current_user, "email", None)
 
 
 def ensure_model_db_file(path):
@@ -163,17 +186,126 @@ def _read_job_status(user_slug, job_id):
 
 
 def _run_training_job(user_slug, job_id, cmd, mode, paths):
+    # experiment_id / dataset_id / owner_email were stashed in the job status at
+    # submit time (this thread has no Flask request context, so current_user is
+    # unavailable here).
+    prior = _read_job_status(user_slug, job_id) or {}
+    experiment_id = prior.get("experiment_id")
+    dataset_id = prior.get("dataset_id")
+    owner_email = prior.get("owner_email")
+
     try:
         process = subprocess.run(cmd)
         if process.returncode == 0:
             write_results(*paths[mode])
             status = {"status": "succeeded", "return_code": process.returncode}
+            if HESTIA_ENABLED:
+                try:
+                    _push_trained_model_to_hestia(
+                        user_slug, mode, paths[mode], experiment_id, dataset_id, owner_email)
+                except Exception as exc:
+                    app.logger.warning(f"HESTIA model push failed: {exc}")
         else:
             status = {"status": "failed", "return_code": process.returncode}
+            if HESTIA_ENABLED and experiment_id:
+                hc.update_experiment(experiment_id, status="failed",
+                                     error=f"training exited with code {process.returncode}")
     except Exception as exc:
         status = {"status": "failed", "return_code": None, "error": str(exc)}
+        if HESTIA_ENABLED and experiment_id:
+            hc.update_experiment(experiment_id, status="failed", error=str(exc))
 
+    # Carry the HESTIA linkage through to the final status (for history/debugging).
+    for key in ("experiment_id", "dataset_id", "owner_email"):
+        if prior.get(key):
+            status[key] = prior[key]
     _write_job_status(user_slug, job_id, status)
+
+
+def _dataset_manifest(mode, final_path, num_classes):
+    """Best-effort, mode-aware manifest describing a validated dataset directory."""
+    manifest = {"mode": mode, "num_classes": num_classes, "archive_format": "tar.gz"}
+
+    def _count(*parts):
+        path = os.path.join(final_path, *parts)
+        return len(os.listdir(path)) if os.path.isdir(path) else 0
+
+    if mode == "segmentation":
+        labelmap = os.path.join(final_path, "labelmap.txt")
+        if os.path.exists(labelmap):
+            with open(labelmap, "r", encoding="utf-8") as f:
+                manifest["labelmap"] = [ln.strip() for ln in f if ln.strip()]
+        manifest["counts"] = {"images_train": _count("images", "train"),
+                              "images_val": _count("images", "val")}
+    elif mode == "detection":
+        manifest["counts"] = {"train_images": _count("train", "images"),
+                              "valid_images": _count("valid", "images")}
+    elif mode == "classification":
+        train_dir = os.path.join(final_path, "train")
+        root = train_dir if os.path.isdir(train_dir) else final_path
+        classes = ([d for d in os.listdir(root)
+                    if os.path.isdir(os.path.join(root, d))]
+                   if os.path.isdir(root) else [])
+        manifest["classes"] = sorted(classes)
+    return manifest
+
+
+def _persist_dataset_to_hestia(user_slug, mode, final_path, num_classes, form):
+    """Push a validated dataset directory to HESTIA (idempotent, non-fatal)."""
+    name = os.path.basename(os.path.normpath(final_path))
+    links = {
+        "scan_id": form.get("linked_scan_id"),
+        "artifact_id": form.get("linked_artifact_id"),
+        "reconstruction_id": form.get("linked_reconstruction_id"),
+    }
+    links = {k: v for k, v in links.items() if v}
+    hc.upload_dataset(
+        owner_slug=user_slug,
+        mode=mode,
+        name=name,
+        src_dir=final_path,
+        owner_email=get_current_user_email(),
+        num_classes=int(num_classes) if num_classes else None,
+        manifest=_dataset_manifest(mode, final_path, num_classes),
+        links=links or None,
+    )
+
+
+def _push_trained_model_to_hestia(user_slug, mode, mode_paths, experiment_id,
+                                  dataset_id, owner_email):
+    """After a successful run, read the freshly-appended CSV row and push the model."""
+    db_loc = mode_paths[1]  # trained_models_db_<mode>.csv
+    with open(db_loc, newline="", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    if not rows:
+        return None
+    row = rows[-1]
+    try:
+        score = float(row.get("score"))
+    except (TypeError, ValueError):
+        score = None
+
+    model_id = hc.push_model(
+        owner_slug=user_slug,
+        mode=mode,
+        name=row.get("name"),
+        trained_on=row.get("trained_on"),
+        weights_path=row.get("checkpoint_path"),
+        config_path=row.get("config_path"),
+        owner_email=owner_email,
+        dataset_id=dataset_id,
+        experiment_id=experiment_id,
+        score=score,
+        metric_name=HESTIA_METRIC.get(mode),
+        trained_date=row.get("date"),
+    )
+    if experiment_id:
+        hc.update_experiment(
+            experiment_id, status="succeeded", result_model_id=model_id,
+            metrics={"score": score, "name": row.get("name"),
+                     "trained_on": row.get("trained_on")},
+        )
+    return model_id
 
 
 @app.route("/user-datasets/<path:filename>")
@@ -241,6 +373,11 @@ def dataset():
         "classification": f"{user_datasets_root}/Classification/"
     }
 
+    # HESTIA: rehydrate the dataset into the local cache so a dataset that lives
+    # only in the data lake (not cached on this node) can still be viewed.
+    if HESTIA_ENABLED:
+        hc.ensure_dataset_local(user_slug, mode, name, dataset_path[mode])
+
     dataset_info, dataset_items = load_dataset_info(
         filepath = dataset_path[mode],
         name     = name,
@@ -276,6 +413,47 @@ def dataset():
 
 
 
+def _merged_datasets(user_slug, mode, mode_short):
+    """Datasets for the UI = local cache ∪ HESTIA (authoritative), keyed by name.
+
+    Local entries keep their on-disk sample count + folder date. HESTIA-only
+    datasets (not cached on this node) are still listed and selectable; training
+    or viewing rehydrates them on demand. Falls back to local-only if HESTIA is
+    unreachable, so nothing (incl. legacy local-only datasets) ever disappears.
+    """
+    base = os.path.join(user_root(user_slug), "Datasets", HESTIA_DATASET_DIR[mode])
+    out = {}
+    for d in load_datasets(base, mode_short):
+        folder = os.path.join(base, d["id"])
+        try:
+            date = datetime.fromtimestamp(get_best_timestamp(folder)).strftime("%d/%m/%Y")
+        except Exception:
+            date = ""
+        out[d["name"]] = {"id": d["name"], "name": d["name"],
+                          "num_samples": d["num_samples"], "type": "2D images",
+                          "date": date, "cached": True}
+
+    if HESTIA_ENABLED:
+        rows = hc.list_datasets(user_slug, mode)
+        if rows is not None:  # None => HESTIA unreachable; keep local-only
+            for r in rows:
+                name = r.get("name")
+                if not name or name in out:
+                    continue
+                counts = (r.get("manifest") or {}).get("counts") or {}
+                num = sum(v for v in counts.values() if isinstance(v, int)) or "—"
+                date = ""
+                if r.get("created_at"):
+                    try:
+                        date = datetime.fromisoformat(r["created_at"]).strftime("%d/%m/%Y")
+                    except Exception:
+                        date = ""
+                out[name] = {"id": name, "name": name, "num_samples": num,
+                             "type": "2D images", "date": date, "cached": False}
+
+    return sorted(out.values(), key=lambda d: str(d["name"]).lower())
+
+
 # Datasets page showing all available datasets with metadata
 @app.route('/collections')
 @login_required
@@ -284,28 +462,9 @@ def collections():
     user_slug = get_current_user_slug()
     user_datasets_root = os.path.join(user_root(user_slug), "Datasets")
 
-    seg_datasets = load_datasets(f"{user_datasets_root}/Segmentation", "Seg")
-    od_datasets  = load_datasets(f"{user_datasets_root}/Object-Detection", "OD")
-    cls_datasets = load_datasets(f"{user_datasets_root}/Classification", "Cls")
-
-    def enrich(datasets, base_path):
-        enriched = []
-        for d in datasets:
-            folder_path = os.path.join(base_path, d["id"])
-            creation_timestamp = get_best_timestamp(folder_path)
-            creation_date = datetime.fromtimestamp(creation_timestamp).strftime("%d/%m/%Y")
-            enriched.append({
-                "name": d["name"],
-                "num_samples": d["num_samples"],
-                "type": "2D images",
-                "date": creation_date,
-                "url": "/dataset"
-            })
-        return enriched
-
-    seg_datasets = enrich(seg_datasets, f"{user_datasets_root}/Segmentation")
-    od_datasets  = enrich(od_datasets, f"{user_datasets_root}/Object-Detection")
-    cls_datasets = enrich(cls_datasets, f"{user_datasets_root}/Classification")
+    seg_datasets = _merged_datasets(user_slug, "segmentation", "Seg")
+    od_datasets  = _merged_datasets(user_slug, "detection", "OD")
+    cls_datasets = _merged_datasets(user_slug, "classification", "Cls")
 
     datasets = {
         "segmentation"  : seg_datasets,
@@ -576,7 +735,7 @@ def process_dataset(mode, zip_path, num_classes=None, user_slug=None):
     shutil.rmtree(os.path.dirname(tmp_dir), ignore_errors=True)
     os.remove(zip_path)
 
-    return True, "Dataset imported successfully"
+    return True, "Dataset imported successfully", final_path
 
 
 @app.route('/dataset_submit', methods=["POST"])
@@ -594,10 +753,19 @@ def dataset_submit():
         flash(error_msg, "danger")
         return redirect(url_for("collections", mode=mode, msg=error_msg, msg_type="danger"))
 
-    success, msg = process_dataset(mode, zip_path, num_classes, user_slug=user_slug)
+    result = process_dataset(mode, zip_path, num_classes, user_slug=user_slug)
+    success, msg = result[0], result[1]
+    final_path = result[2] if len(result) > 2 else None
 
     if not success:
         return redirect(url_for("collections", mode=mode, msg=msg, msg_type="danger"))
+
+    # HESTIA: persist the validated dataset to the data lake (non-fatal).
+    if HESTIA_ENABLED and final_path:
+        try:
+            _persist_dataset_to_hestia(user_slug, mode, final_path, num_classes, request.form)
+        except Exception as e:
+            app.logger.warning(f"HESTIA dataset persist failed: {e}")
 
     return redirect(url_for("collections", mode=mode, msg=msg, msg_type="info"))
 
@@ -619,9 +787,9 @@ def train_model():
     user_slug = get_current_user_slug()
     user_datasets_root = os.path.join(user_root(user_slug), "Datasets")
 
-    od_collections  = load_datasets(f"{user_datasets_root}/Object-Detection","OD")
-    seg_collections = load_datasets(f"{user_datasets_root}/Segmentation","Seg")
-    cls_collections = load_datasets(f"{user_datasets_root}/Classification","Cls")
+    od_collections  = _merged_datasets(user_slug, "detection", "OD")
+    seg_collections = _merged_datasets(user_slug, "segmentation", "Seg")
+    cls_collections = _merged_datasets(user_slug, "classification", "Cls")
 
     collections = {
         "segmentation"  : seg_collections,
@@ -771,15 +939,45 @@ def train_model():
 
 
 # Page for the trained models
+def _hestia_models_for_template(user_slug, mode, csv_path):
+    """Trained models for the UI: from HESTIA when reachable, else the local CSV.
+
+    Maps HESTIA rows to the shape models.html / inference expect, using the UUID
+    model_id as the link id (id=...) so inference selects by UUID, not row index.
+    """
+    rows = hc.list_models(user_slug, mode)
+    if rows is None:  # HESTIA unreachable -> fall back to the local CSV
+        return load_models(csv_path)
+    return [
+        {
+            "id"        : r.get("model_id"),
+            "model_id"  : r.get("model_id"),
+            "name"      : r.get("name"),
+            "trained_on": r.get("trained_on"),
+            "score"     : r.get("score"),
+            "date"      : r.get("trained_date"),
+        }
+        for r in rows
+    ]
+
+
 @app.route('/models')
 @login_required
 def models():
     user_slug = get_current_user_slug()
     ensure_user_folders(user_slug)
 
-    seg_models = load_models(os.path.join(user_root(user_slug), "models_db", "trained_models_db_segm.csv"))
-    od_models  = load_models(os.path.join(user_root(user_slug), "models_db", "trained_models_db_od.csv"))
-    cls_models = load_models(os.path.join(user_root(user_slug), "models_db", "trained_models_db_cls.csv"))
+    seg_csv = os.path.join(user_root(user_slug), "models_db", "trained_models_db_segm.csv")
+    od_csv  = os.path.join(user_root(user_slug), "models_db", "trained_models_db_od.csv")
+    cls_csv = os.path.join(user_root(user_slug), "models_db", "trained_models_db_cls.csv")
+    if HESTIA_ENABLED:
+        seg_models = _hestia_models_for_template(user_slug, "segmentation", seg_csv)
+        od_models  = _hestia_models_for_template(user_slug, "detection", od_csv)
+        cls_models = _hestia_models_for_template(user_slug, "classification", cls_csv)
+    else:
+        seg_models = load_models(seg_csv)
+        od_models  = load_models(od_csv)
+        cls_models = load_models(cls_csv)
 
     models = {
         "segmentation"  : seg_models,
@@ -958,7 +1156,45 @@ def train_model_submit():
     }
     
     job_id = str(uuid.uuid4())
-    _write_job_status(user_slug, job_id, {"status": "running", "mode": mode})
+    job_status = {"status": "running", "mode": mode}
+
+    # HESTIA: rehydrate the dataset into the local cache (so the Katib job's
+    # hostPath mount sees it) and record the experiment. Non-fatal.
+    if HESTIA_ENABLED:
+        try:
+            dest_root = os.path.join(user_root(user_slug), "Datasets", HESTIA_DATASET_DIR[mode])
+            hc.ensure_dataset_local(user_slug, mode, selected_collection, dest_root)
+
+            ds = hc.find_dataset(user_slug, mode, selected_collection)
+            dataset_id = ds.get("dataset_id") if ds else None
+            if mode == "detection":
+                augmentations = {"hue": hue_maxval, "saturation": sat_maxval,
+                                 "value": val_maxval, "flip": flp_prob, "rotate": rot_maxval}
+            else:
+                augmentations = {"blur": bool_str(blur_enabled), "scale": bool_str(scale_enabled),
+                                 "rotate": bool_str(rotate_enabled), "flip": bool_str(flip_enabled)}
+            params_payload = {
+                "learning_rate": {"left": lr_left, "right": lr_right},
+                "batch_size": {"left": bs_left, "right": bs_right},
+                "epochs": {"left": epoch_left, "right": epoch_right},
+                "augmentations": augmentations,
+            }
+            owner_email = get_current_user_email()
+            experiment_id = hc.create_experiment(
+                user_slug, mode, dataset_id=dataset_id,
+                dataset_name=selected_collection, requested_model=selected_model,
+                params=params_payload, job_id=job_id, owner_email=owner_email,
+            )
+            if experiment_id:
+                job_status["experiment_id"] = experiment_id
+            if dataset_id:
+                job_status["dataset_id"] = dataset_id
+            if owner_email:
+                job_status["owner_email"] = owner_email
+        except Exception as e:
+            app.logger.warning(f"HESTIA train setup failed: {e}")
+
+    _write_job_status(user_slug, job_id, job_status)
 
     thread = threading.Thread(
         target=_run_training_job,
@@ -980,10 +1216,37 @@ def train_status(job_id):
     return jsonify(status)
 
 
+def _persist_inference_to_hestia(user_slug, mode, model_id, model_name, dataset_name,
+                                 files, save_dir, output_map, color_table):
+    """Record an inference run in HESTIA and upload its input + output images."""
+    inf_id = hc.create_inference_run(user_slug, mode, model_id=model_id,
+                                     model_name=model_name, dataset_name=dataset_name)
+    if not inf_id:
+        return
+    input_paths = [os.path.join(save_dir, secure_filename(f.filename))
+                   for f in files if f.filename]
+    hc.upload_inference_inputs(inf_id, input_paths)
+
+    # mapping: output filename -> originating input filename
+    mapping = {}
+    for f in files:
+        if not f.filename:
+            continue
+        fn = secure_filename(f.filename)
+        base = os.path.splitext(fn)[0]
+        for out_name in output_map:
+            if base in out_name:
+                mapping[out_name] = fn
+                break
+    out_paths = list(output_map.values())
+    hc.upload_inference_outputs(inf_id, out_paths, mapping=mapping,
+                               color_table=color_table or None)
+
+
 @app.route('/inference', methods=['GET', 'POST'])
 @login_required
 def inference():
-    model_id = int(request.args.get("id"))
+    raw_id    = request.args.get("id")
     mode     = request.args.get("mode")
     user_slug = get_current_user_slug()
     ensure_user_folders(user_slug)
@@ -1005,31 +1268,61 @@ def inference():
     
     }
     mode_params = params[mode]
-    model_csv   = mode_params["csv"]
     metric      = mode_params["metric"]
 
-    with open(model_csv, newline='', encoding='utf-8') as csvfile:
-        reader = csv.DictReader(csvfile)
-        models = [row for row in reader]
-    
-    # Match ui input with the list of models
-    model = next((m for i, m in enumerate(models, 1) if i == model_id), None)
-    if not model:
-        return "Model not found", 404
-    
+    # Resolve the model: segmentation is HESTIA-backed (addressed by UUID);
+    # other modes use the 1-based CSV row index. CSV is also the fallback.
+    model = None
+    hestia_model = None
+    model_id = raw_id
+    if HESTIA_ENABLED:
+        hestia_model = hc.get_model(raw_id)
+        if hestia_model:
+            model = {
+                "name"      : hestia_model.get("name"),
+                "trained_on": hestia_model.get("trained_on"),
+                "score"     : hestia_model.get("score"),
+                "date"      : hestia_model.get("trained_date"),
+                "model_id"  : hestia_model.get("model_id"),
+            }
+            model_id = hestia_model.get("model_id")
+
+    if model is None:
+        try:
+            model_id = int(raw_id)
+        except (TypeError, ValueError):
+            return "Model not found", 404
+        with open(mode_params["csv"], newline='', encoding='utf-8') as csvfile:
+            reader = csv.DictReader(csvfile)
+            models = [row for row in reader]
+        model = next((m for i, m in enumerate(models, 1) if i == model_id), None)
+        if not model:
+            return "Model not found", 404
+
     error_msg   = None
     success_msg = None
 
     results         = []
     model_name      = model['name']
-    checkpoint_path = model['checkpoint_path']
-    config_path     = model['config_path']
+    checkpoint_path = model.get('checkpoint_path')   # set via rehydrate for HESTIA models
+    config_path     = model.get('config_path')
     color_table     = []                        # for color map (segmentation mode)
-    dataset_name    = model['trained_on']
+    dataset_name    = model.get('trained_on')
     inference_root = os.path.join(user_root(user_slug), "inference", mode)
     
     if request.method == 'POST':
         if mode == "segmentation":
+            # HESTIA: rehydrate model weights/config + dataset labelmap into the
+            # local cache so the inference container (and color table) can see them.
+            if hestia_model:
+                cache_dir = os.path.join(user_root(user_slug), "Segmentation",
+                                         "_hestia_cache", str(model_id))
+                checkpoint_path, config_path = hc.ensure_model_local(hestia_model, cache_dir)
+                if dataset_name:
+                    hc.ensure_dataset_local(
+                        user_slug, "segmentation", dataset_name,
+                        os.path.join(user_root(user_slug), "Datasets", "Segmentation"))
+
             files = request.files.getlist('image')  # Get multiple files
             if files:
                 timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
@@ -1121,8 +1414,24 @@ def inference():
                                 })
                 
                 success_msg = f"Inference for {len(files)} image(s) completed!"
-        
+
+            # HESTIA: persist inference inputs + outputs (non-fatal).
+            if HESTIA_ENABLED and hestia_model and files:
+                try:
+                    _persist_inference_to_hestia(
+                        user_slug, "segmentation", str(model_id), model_name,
+                        dataset_name, files, save_dir, output_map, color_table)
+                except Exception as e:
+                    app.logger.warning(f"HESTIA inference persist failed: {e}")
+
         if mode == "detection":
+            # HESTIA: rehydrate model weights/config into the local cache so the
+            # inference container can see them.
+            if hestia_model:
+                cache_dir = os.path.join(user_root(user_slug), "ObjectDetection",
+                                         "_hestia_cache", str(model_id))
+                checkpoint_path, config_path = hc.ensure_model_local(hestia_model, cache_dir)
+
             files = request.files.getlist('image')  # Get multiple files
             if files:
                 timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
@@ -1201,7 +1510,24 @@ def inference():
                 
                 success_msg = f"Inference for {len(files)} image(s) completed!"
 
+                # HESTIA: persist inference inputs + outputs (non-fatal).
+                if HESTIA_ENABLED and hestia_model:
+                    try:
+                        det_out_map = {os.path.basename(v): v for v in output_map.values()}
+                        _persist_inference_to_hestia(
+                            user_slug, "detection", str(model_id), model_name,
+                            dataset_name, files, save_dir, det_out_map, None)
+                    except Exception as e:
+                        app.logger.warning(f"HESTIA inference persist failed: {e}")
+
         if mode == "classification":
+            # HESTIA: rehydrate model weights/config into the local cache so the
+            # inference container can see them.
+            if hestia_model:
+                cache_dir = os.path.join(user_root(user_slug), "Classification",
+                                         "_hestia_cache", str(model_id))
+                checkpoint_path, config_path = hc.ensure_model_local(hestia_model, cache_dir)
+
             files = request.files.getlist('file')  # Get multiple files
             if files:
                 timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
@@ -1266,6 +1592,17 @@ def inference():
                         'output_text': output_text,
                         'filename'   : filename
                     })
+
+                # HESTIA: persist inference inputs + outputs (non-fatal).
+                if HESTIA_ENABLED and hestia_model:
+                    try:
+                        cls_out_map = {os.path.basename(p): p
+                                       for p in glob.glob(os.path.join(output_dir, '*.txt'))}
+                        _persist_inference_to_hestia(
+                            user_slug, "classification", str(model_id), model_name,
+                            dataset_name, files, save_dir, cls_out_map, None)
+                    except Exception as e:
+                        app.logger.warning(f"HESTIA inference persist failed: {e}")
 
             success_msg = f"Inference for {len(files)} image(s) completed!"
     
