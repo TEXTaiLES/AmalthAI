@@ -113,6 +113,12 @@ HESTIA_DATASET_DIR = {
     "detection": "Object-Detection",
     "classification": "Classification",
 }
+# Model / run directories (no hyphen for detection) — where the weights cache lives.
+HESTIA_MODEL_DIR = {
+    "segmentation": "Segmentation",
+    "detection": "ObjectDetection",
+    "classification": "Classification",
+}
 
 
 def safe_user_slug(email):
@@ -413,16 +419,39 @@ def dataset():
 
 
 
-def _merged_datasets(user_slug, mode, mode_short):
+def _write_dataset_index(path, rows):
+    """Persist a slim HESTIA dataset list locally so the offline list stays complete."""
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        slim = [{"name": r.get("name"), "manifest": r.get("manifest"),
+                 "created_at": r.get("created_at")} for r in rows]
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(slim, f)
+    except Exception as e:
+        app.logger.warning(f"HESTIA dataset index write failed: {e}")
+
+
+def _read_dataset_index(path):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+
+def _merged_datasets(user_slug, mode, mode_short, online):
     """Datasets for the UI = local cache ∪ HESTIA (authoritative), keyed by name.
 
-    Local entries keep their on-disk sample count + folder date. HESTIA-only
-    datasets (not cached on this node) are still listed and selectable; training
-    or viewing rehydrates them on demand. Falls back to local-only if HESTIA is
-    unreachable, so nothing (incl. legacy local-only datasets) ever disappears.
+    On a successful HESTIA read the list is mirrored to a local index file, so when
+    HESTIA is offline the full inventory still shows (entries not cached on this node
+    are flagged unavailable until HESTIA returns). Falls back to local-only if even
+    the index is absent, so nothing (incl. legacy local-only datasets) disappears.
     """
     base = os.path.join(user_root(user_slug), "Datasets", HESTIA_DATASET_DIR[mode])
+    index_path = os.path.join(base, ".hestia_index.json")
     out = {}
+
+    # 1) Locally-cached datasets — real sample counts + folder dates, always usable.
     for d in load_datasets(base, mode_short):
         folder = os.path.join(base, d["id"])
         try:
@@ -431,25 +460,34 @@ def _merged_datasets(user_slug, mode, mode_short):
             date = ""
         out[d["name"]] = {"id": d["name"], "name": d["name"],
                           "num_samples": d["num_samples"], "type": "2D images",
-                          "date": date, "cached": True}
+                          "date": date, "cached": True, "available": True}
 
-    if HESTIA_ENABLED:
+    # 2) HESTIA datasets (live when online; the mirrored index when offline).
+    rows, reachable = None, False
+    if online:
         rows = hc.list_datasets(user_slug, mode)
-        if rows is not None:  # None => HESTIA unreachable; keep local-only
-            for r in rows:
-                name = r.get("name")
-                if not name or name in out:
-                    continue
-                counts = (r.get("manifest") or {}).get("counts") or {}
-                num = sum(v for v in counts.values() if isinstance(v, int)) or "—"
+        if rows is not None:
+            reachable = True
+            _write_dataset_index(index_path, rows)
+    if rows is None:
+        rows = _read_dataset_index(index_path)
+
+    for r in rows:
+        name = r.get("name")
+        if not name or name in out:
+            continue
+        counts = (r.get("manifest") or {}).get("counts") or {}
+        num = sum(v for v in counts.values() if isinstance(v, int)) or "—"
+        date = ""
+        if r.get("created_at"):
+            try:
+                date = datetime.fromisoformat(r["created_at"]).strftime("%d/%m/%Y")
+            except Exception:
                 date = ""
-                if r.get("created_at"):
-                    try:
-                        date = datetime.fromisoformat(r["created_at"]).strftime("%d/%m/%Y")
-                    except Exception:
-                        date = ""
-                out[name] = {"id": name, "name": name, "num_samples": num,
-                             "type": "2D images", "date": date, "cached": False}
+        # Not cached locally -> can only be rehydrated/opened while HESTIA is up.
+        out[name] = {"id": name, "name": name, "num_samples": num,
+                     "type": "2D images", "date": date,
+                     "cached": False, "available": reachable}
 
     return sorted(out.values(), key=lambda d: str(d["name"]).lower())
 
@@ -462,9 +500,10 @@ def collections():
     user_slug = get_current_user_slug()
     user_datasets_root = os.path.join(user_root(user_slug), "Datasets")
 
-    seg_datasets = _merged_datasets(user_slug, "segmentation", "Seg")
-    od_datasets  = _merged_datasets(user_slug, "detection", "OD")
-    cls_datasets = _merged_datasets(user_slug, "classification", "Cls")
+    online = HESTIA_ENABLED and hc.is_online()
+    seg_datasets = _merged_datasets(user_slug, "segmentation", "Seg", online)
+    od_datasets  = _merged_datasets(user_slug, "detection", "OD", online)
+    cls_datasets = _merged_datasets(user_slug, "classification", "Cls", online)
 
     datasets = {
         "segmentation"  : seg_datasets,
@@ -486,7 +525,8 @@ def collections():
     return render_template(
         "collections.html",
         mode=mode,
-        datasets=datasets[mode]
+        datasets=datasets[mode],
+        hestia_online=(online or not HESTIA_ENABLED),
     )
 
 
@@ -787,9 +827,10 @@ def train_model():
     user_slug = get_current_user_slug()
     user_datasets_root = os.path.join(user_root(user_slug), "Datasets")
 
-    od_collections  = _merged_datasets(user_slug, "detection", "OD")
-    seg_collections = _merged_datasets(user_slug, "segmentation", "Seg")
-    cls_collections = _merged_datasets(user_slug, "classification", "Cls")
+    online = HESTIA_ENABLED and hc.is_online()
+    od_collections  = _merged_datasets(user_slug, "detection", "OD", online)
+    seg_collections = _merged_datasets(user_slug, "segmentation", "Seg", online)
+    cls_collections = _merged_datasets(user_slug, "classification", "Cls", online)
 
     collections = {
         "segmentation"  : seg_collections,
@@ -939,15 +980,43 @@ def train_model():
 
 
 # Page for the trained models
-def _hestia_models_for_template(user_slug, mode, csv_path):
-    """Trained models for the UI: from HESTIA when reachable, else the local CSV.
+def _backfill_models_csv(user_slug, mode, rows, csv_path):
+    """Mirror HESTIA model rows into the local CSV so the offline fallback is complete.
 
-    Maps HESTIA rows to the shape models.html / inference expect, using the UUID
-    model_id as the link id (id=...) so inference selects by UUID, not row index.
+    checkpoint/config paths point at the _hestia_cache location ensure_model_local
+    uses, so a model already rehydrated on this node still runs while HESTIA is down.
     """
-    rows = hc.list_models(user_slug, mode)
-    if rows is None:  # HESTIA unreachable -> fall back to the local CSV
+    cache_root = os.path.join(user_root(user_slug), HESTIA_MODEL_DIR[mode], "_hestia_cache")
+    try:
+        os.makedirs(os.path.dirname(csv_path), exist_ok=True)
+        with open(csv_path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(["name", "trained_on", "score", "date",
+                             "checkpoint_path", "config_path"])
+            for r in rows:
+                cdir = os.path.join(cache_root, str(r.get("model_id")))
+                wk, ck = r.get("weights_key") or "", r.get("config_key") or ""
+                ckpt = os.path.join(cdir, os.path.basename(wk)) if wk else ""
+                cfg = os.path.join(cdir, os.path.basename(ck)) if ck else ""
+                writer.writerow([r.get("name"), r.get("trained_on"), r.get("score"),
+                                 r.get("trained_date"), ckpt, cfg])
+    except Exception as e:
+        app.logger.warning(f"HESTIA models CSV backfill failed: {e}")
+
+
+def _hestia_models_for_template(user_slug, mode, csv_path, online):
+    """Trained models for the UI.
+
+    When HESTIA is reachable, read it (UUID model_id as the link id) and mirror the
+    rows into the local CSV so the offline fallback stays complete; otherwise read
+    the backfilled CSV.
+    """
+    if not online:
         return load_models(csv_path)
+    rows = hc.list_models(user_slug, mode)
+    if rows is None:  # went offline mid-request
+        return load_models(csv_path)
+    _backfill_models_csv(user_slug, mode, rows, csv_path)
     return [
         {
             "id"        : r.get("model_id"),
@@ -967,17 +1036,13 @@ def models():
     user_slug = get_current_user_slug()
     ensure_user_folders(user_slug)
 
+    online = HESTIA_ENABLED and hc.is_online()
     seg_csv = os.path.join(user_root(user_slug), "models_db", "trained_models_db_segm.csv")
     od_csv  = os.path.join(user_root(user_slug), "models_db", "trained_models_db_od.csv")
     cls_csv = os.path.join(user_root(user_slug), "models_db", "trained_models_db_cls.csv")
-    if HESTIA_ENABLED:
-        seg_models = _hestia_models_for_template(user_slug, "segmentation", seg_csv)
-        od_models  = _hestia_models_for_template(user_slug, "detection", od_csv)
-        cls_models = _hestia_models_for_template(user_slug, "classification", cls_csv)
-    else:
-        seg_models = load_models(seg_csv)
-        od_models  = load_models(od_csv)
-        cls_models = load_models(cls_csv)
+    seg_models = _hestia_models_for_template(user_slug, "segmentation", seg_csv, online)
+    od_models  = _hestia_models_for_template(user_slug, "detection", od_csv, online)
+    cls_models = _hestia_models_for_template(user_slug, "classification", cls_csv, online)
 
     models = {
         "segmentation"  : seg_models,
@@ -999,6 +1064,7 @@ def models():
         'models.html',
         mode    = mode,
         models  = models[mode],
+        hestia_online = (online or not HESTIA_ENABLED),
     )
 
 

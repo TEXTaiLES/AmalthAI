@@ -9,6 +9,12 @@
     {% set header_text= "Collections for " ~ mode|capitalize %}
     {% include 'partials/mode_header.html' %}
     
+    {% if not hestia_online %}
+    <div class="alert alert-warning py-2" role="alert">
+        Data lake offline — showing the last-synced inventory. Datasets not cached on this node are temporarily unavailable until it's back.
+    </div>
+    {% endif %}
+
     <!-- Add model button -->
     <div class="row mb-3">
         <div class="col text-start">
@@ -38,6 +44,13 @@
                             <a href="{{url_for('dataset', id=dataset.name, mode=mode)}}">
                             {{ dataset.name }}
                             </a>
+                            {% if not dataset.cached %}
+                                {% if dataset.available %}
+                                <span class="badge bg-info text-dark" title="In the data lake; downloads to this node on use">cloud</span>
+                                {% else %}
+                                <span class="badge bg-secondary" title="Not on this node and data lake offline">unavailable</span>
+                                {% endif %}
+                            {% endif %}
                         </td>
                         <td>{{ dataset.type }}</td>
                         <td>{{ dataset.num_samples }}</td>

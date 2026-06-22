@@ -61,6 +61,17 @@ def _url(path):
 # --------------------------------------------------------------------------- #
 # Low-level HTTP helpers
 # --------------------------------------------------------------------------- #
+def is_online(timeout=5):
+    """Cheap reachability probe (short timeout) for degraded-mode decisions.
+
+    Used so a page doesn't fan out several long-timeout calls when HESTIA is down.
+    """
+    try:
+        return requests.get(_url("/health"), timeout=timeout).ok
+    except Exception:
+        return False
+
+
 def _get(path, params=None):
     try:
         r = requests.get(_url(path), headers=_headers(), params=params, timeout=T)

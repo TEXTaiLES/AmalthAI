@@ -9,6 +9,12 @@
     {% set header_text= "Models for " ~ mode|capitalize %}
     {% include 'partials/mode_header.html' %}
     
+    {% if not hestia_online %}
+    <div class="alert alert-warning py-2" role="alert">
+        Data lake offline — showing the last-synced model list. Models not cached on this node can't run until it's back.
+    </div>
+    {% endif %}
+
     <!-- Body -->
     <div class="row">
         <div class="table-responsive mb-4">
