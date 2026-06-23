@@ -36,8 +36,6 @@ defaults:
   seg_rotate: true
   seg_flip: true
 
-  det_hue: 0.015
-  det_sat: 0.6
-  det_val: 0.4
-  det_flip: 0.4
-  det_rotate: 0.0
+  det_flip: true
+  det_rotate: true
+  det_scale: true

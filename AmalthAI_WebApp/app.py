@@ -877,20 +877,19 @@ def train_model():
         },
         "detection": {
             "flip": {
-                "type"           : "range",
-                "default"        : True,
-                "prob_range"     : [0.0, 0.2, 0.4, 0.6, 0.8, 1],
-                "prob_default"   : config.get('defaults').get('det_flip'),
-                "unit"           : None,
-                "description": "Randomly flips images horizontally with specified probability for spatial invariance."
+                "type"   : "bool",
+                "default": config.get('defaults').get('det_flip'),
+                "description": "Flips images horizontally or vertically for spatial invariance."
             },
             "rotate": {
-                "type"           : "range",
-                "default"        : True,
-                "max_val_range"  : [0, 30, 60, 90, 120, 150, 180],
-                "max_val_default": config.get('defaults').get('det_rotate'),
-                "unit"           : "degrees",
-                "description": "Randomly rotates images within specified angle range to improve rotational invariance."
+                "type"   : "bool",
+                "default": config.get('defaults').get('det_rotate'),
+                "description": "Randomly rotates images to improve generalization to different orientations."
+            },
+            "scale" : {
+                "type": "bool",
+                "default": config.get('defaults').get('det_scale'),
+                "description": "Randomly scales images to different sizes for improved robustness."
             },
         }
     }
@@ -999,13 +998,6 @@ def train_model_submit():
     rotate_enabled  = request.form.get('rotate_enabled', 'false')
     flip_enabled    = request.form.get('flip_enabled', 'false')
 
-    rot_enabled = request.form.get('rotate_enabled', 'false')
-    rot_prob    = request.form.get('rotate_prob', 0.0)
-    rot_maxval  = request.form.get('rotate_maxval', 0.0)
-
-    flp_enabled = request.form.get('flip_enabled', 'false')
-    flp_prob    = request.form.get('flip_prob', 0.0)
-
     print(selected_collection)
     print(selected_model)
     print("Lr Left:", lr_left)
@@ -1063,18 +1055,11 @@ def train_model_submit():
     det_cmd = [
         "python", "training_button_object_detection.py",
         "--user", user_slug,
-    ] + base_args
-
-
-    if bool_str(rot_enabled) == "true":
-        det_cmd += ["--rotate", rot_maxval]
-    else: 
-        det_cmd += ["--rotate", "0.0"]
-
-    if bool_str(flp_enabled) == "true":
-        det_cmd += ["--flip", flp_prob]
-    else: 
-        det_cmd += ["--flip", "0.0"]
+    ] + base_args + [
+        "--rotate", bool_str(rotate_enabled),
+        "--flip", bool_str(flip_enabled),
+        "--scale", bool_str(scale_enabled),
+    ]
 
     subprocesses = {
         "segmentation"  : seg_cmd,
@@ -1116,7 +1101,7 @@ def train_model_submit():
             ds = hc.find_dataset(user_slug, mode, selected_collection)
             dataset_id = ds.get("dataset_id") if ds else None
             if mode == "detection":
-                augmentations = {"flip": flp_prob, "rotate": rot_maxval}
+                augmentations = {"rotate": bool_str(rotate_enabled), "flip": bool_str(flip_enabled), "scale": bool_str(scale_enabled)}
             else:
                 augmentations = {"blur": bool_str(blur_enabled), "scale": bool_str(scale_enabled),
                                  "rotate": bool_str(rotate_enabled), "flip": bool_str(flip_enabled)}

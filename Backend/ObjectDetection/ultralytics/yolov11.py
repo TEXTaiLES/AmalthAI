@@ -13,26 +13,24 @@ parser.add_argument('--lr', type=float, required=True, help='Learning Rate')
 parser.add_argument('--dataset',type = str, required=True, help = "Dataset Config File")
 parser.add_argument('--timestamp',type = str, required=True, help = "Timestamp")
 
-parser.add_argument(
-    "--rotate", 
-    type=int,
-    default=15,
-    help="Rotate augmentation factor"
-)
-parser.add_argument(
-    "--flip", 
-    type=float,
-    default=0.5,
-    help="Flip augmentation factor"
-)   
+parser.add_argument('--rotate', type=str, default='false', choices=['true', 'false'], help='Enable rotation augmentation')
+parser.add_argument('--flip', type=str, default='false', choices=['true', 'false'], help='Enable flip augmentation')
+parser.add_argument('--scale', type=str, default='false', choices=['true', 'false'], help='Enable scale augmentation')
+
 args = parser.parse_args()
 
 # Load a model
 model = YOLO("yolo11n.yaml").load("yolo11n.pt")  # build from YAML and transfer weights
 
 current_time_micro = datetime.datetime.now().microsecond
+
+# Augmentations (YOLO Defaults)
+rotate_value = 30 if args.rotate == "true" else 0
+flip_value = 0.5 if args.flip == "true" else 0
+scale_value = 0.5 if args.scale == "true" else 0
+
 # Start training
-results = model.train(data= args.dataset, epochs=args.epochs, batch = args.bs,lr0 = args.lr, imgsz=460, device = [0],project=f"/yolosave/runs/{args.timestamp}/YOLOv11", name=f"run_{current_time_micro}", degrees = args.rotate, fliplr = args.flip)
+results = model.train(data= args.dataset, epochs=args.epochs, batch = args.bs,lr0 = args.lr, imgsz=460, device = [0],project=f"/yolosave/runs/{args.timestamp}/YOLOv11", name=f"run_{current_time_micro}", degrees = rotate_value, fliplr = flip_value, scale = scale_value)
 
 df = pd.read_csv(f"/yolosave/runs/{args.timestamp}/YOLOv11/run_{current_time_micro}/results.csv")
 

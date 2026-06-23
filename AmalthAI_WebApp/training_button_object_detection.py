@@ -79,20 +79,28 @@ parser.add_argument(
     help="Epochs right range"
 )
 
-
 parser.add_argument(
     "--rotate", 
-    type=int,
-    default=15,
-    help="Rotate augmentation factor"
+    type=str,
+    default='false',
+    choices=['true', 'false'],
+    help="Enable rotation augmentation"
 )
 parser.add_argument(
     "--flip", 
-    type=float,
-    default=0.5,
+    type=str,
+    default='false',
+    choices=['true', 'false'],
     help="Flip augmentation factor"
 )   
 
+parser.add_argument(
+    "--scale", 
+    type=str,
+    default='false',
+    choices=['true', 'false'],
+    help="Scale augmentation factor"
+)   
 
 args = parser.parse_args()
 model_selection = args.model
@@ -110,6 +118,7 @@ epoch_left = args.epoch_left
 
 rotate = args.rotate
 flip = args.flip
+scale = args.scale
 
 def get_timestamp_path():
     now = datetime.datetime.now()
@@ -126,7 +135,7 @@ if model_selection == "allmodels":
     all_success = True  # flag
 
     for model in models_list:
-        res = conduct_experiment_od(model, timestamp_path, dataset, lr_left, lr_right, bs_left, bs_right, epoch_left, epoch_right, rotate, flip, user_slug)
+        res = conduct_experiment_od(model, timestamp_path, dataset, lr_left, lr_right, bs_left, bs_right, epoch_left, epoch_right, rotate, flip, scale, user_slug)
         print(f"Last condition for {model}: {res}")
 
         if res != "Succeeded":
@@ -135,7 +144,7 @@ if model_selection == "allmodels":
     final_res = "Succeeded" if all_success else "Failed"
 
 else:
-    final_res = conduct_experiment_od(model_selection, timestamp_path, dataset, lr_left, lr_right, bs_left, bs_right, epoch_left, epoch_right, rotate, flip, user_slug)
+    final_res = conduct_experiment_od(model_selection, timestamp_path, dataset, lr_left, lr_right, bs_left, bs_right, epoch_left, epoch_right, rotate, flip, scale, user_slug)
     print(f"Last condition for {model_selection}: {final_res}")
 
 
