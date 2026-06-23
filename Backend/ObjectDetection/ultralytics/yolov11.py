@@ -14,24 +14,6 @@ parser.add_argument('--dataset',type = str, required=True, help = "Dataset Confi
 parser.add_argument('--timestamp',type = str, required=True, help = "Timestamp")
 
 parser.add_argument(
-    "--hue", 
-    type=float,
-    default=0.5,
-    help="Hue augmentation factor"
-)
-parser.add_argument(
-    "--saturation",
-    type=float,
-    default=0.5,
-    help="Saturation augmentation factor"
-)
-parser.add_argument(
-    "--value",          
-    type=float,
-    default=0.5,
-    help="Value augmentation factor"
-)
-parser.add_argument(
     "--rotate", 
     type=int,
     default=15,
@@ -50,7 +32,7 @@ model = YOLO("yolo11n.yaml").load("yolo11n.pt")  # build from YAML and transfer 
 
 current_time_micro = datetime.datetime.now().microsecond
 # Start training
-results = model.train(data= args.dataset, epochs=args.epochs, batch = args.bs,lr0 = args.lr, imgsz=460, device = [0],project=f"/yolosave/runs/{args.timestamp}/YOLOv11", name=f"run_{current_time_micro}", hsv_h = args.hue, hsv_s = args.saturation, hsv_v = args.value, degrees = args.rotate, fliplr = args.flip)
+results = model.train(data= args.dataset, epochs=args.epochs, batch = args.bs,lr0 = args.lr, imgsz=460, device = [0],project=f"/yolosave/runs/{args.timestamp}/YOLOv11", name=f"run_{current_time_micro}", degrees = args.rotate, fliplr = args.flip)
 
 df = pd.read_csv(f"/yolosave/runs/{args.timestamp}/YOLOv11/run_{current_time_micro}/results.csv")
 

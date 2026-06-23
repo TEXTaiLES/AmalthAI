@@ -876,36 +876,6 @@ def train_model():
             }
         },
         "detection": {
-            "hue": {
-                "type"           : "range",
-                "default"        : True,
-                # "prob_range"     : [0.0, 0.2, 0.4, 0.6, 0.8, 1],
-                # "prob_default"   : 0.2,
-                "max_val_range"  : [0.005, 0.01, 0.015, 0.02, 0.025, 0.03],
-                "max_val_default": config.get('defaults').get('det_hue'),
-                "unit"           : None,
-                "description": "Adjusts color hue to simulate different lighting conditions and improve color robustness."
-            },
-            "saturation": {
-                "type"           : "range",
-                "default"        : True,
-                # "prob_range"     : [0.0, 0.2, 0.4, 0.6, 0.8, 1],
-                # "prob_default"   : 0.2,
-                "max_val_range"  : [0.0, 0.2, 0.4, 0.6, 0.8, 1],
-                "max_val_default": config.get('defaults').get('det_sat'),
-                "unit"           : None,
-                "description": "Modifies color saturation to improve the model's invariance to color variations."
-            },
-            "value": {
-                "type"           : "range",
-                "default"        : True,
-                # "prob_range"     : [0.0, 0.2, 0.4, 0.6, 0.8, 1],
-                # "prob_default"   : 0.2,
-                "max_val_range"  : [0.0, 0.2, 0.4, 0.6, 0.8, 1],
-                "max_val_default": config.get('defaults').get('det_val'),
-                "unit"           : None,
-                "description": "Changes brightness values to handle varying illumination and improve brightness robustness."
-            },
             "flip": {
                 "type"           : "range",
                 "default"        : True,
@@ -917,8 +887,6 @@ def train_model():
             "rotate": {
                 "type"           : "range",
                 "default"        : True,
-                # "prob_range"     : [0.0, 0.2, 0.4, 0.6, 0.8, 1],
-                # "prob_default"   : 0.2,
                 "max_val_range"  : [0, 30, 60, 90, 120, 150, 180],
                 "max_val_default": config.get('defaults').get('det_rotate'),
                 "unit"           : "degrees",
@@ -1031,18 +999,6 @@ def train_model_submit():
     rotate_enabled  = request.form.get('rotate_enabled', 'false')
     flip_enabled    = request.form.get('flip_enabled', 'false')
 
-    hue_enabled = request.form.get('hue_enabled', 'false')
-    hue_prob    = request.form.get('hue_prob', 0.0)
-    hue_maxval  = request.form.get('hue_maxval', 0.0)
-    
-    sat_enabled = request.form.get('saturation_enabled', 'false')
-    sat_prob    = request.form.get('saturation_prob', 0.0)
-    sat_maxval  = request.form.get('saturation_maxval', 0.0)
-
-    val_enabled = request.form.get('value_enabled', 'false')
-    val_prob    = request.form.get('value_prob', 0.0)
-    val_maxval  = request.form.get('value_maxval', 0.0)
-
     rot_enabled = request.form.get('rotate_enabled', 'false')
     rot_prob    = request.form.get('rotate_prob', 0.0)
     rot_maxval  = request.form.get('rotate_maxval', 0.0)
@@ -1109,20 +1065,6 @@ def train_model_submit():
         "--user", user_slug,
     ] + base_args
 
-    if bool_str(hue_enabled) == "true":
-        det_cmd += ["--hue", hue_maxval]
-    else: 
-        det_cmd += ["--hue", "0.0"]
-
-    if bool_str(sat_enabled) == "true":
-        det_cmd += ["--saturation", sat_maxval]
-    else: 
-        det_cmd += ["--saturation", "0.0"]
-        
-    if bool_str(val_enabled) == "true":
-        det_cmd += ["--value", val_maxval]
-    else: 
-        det_cmd += ["--value", "0.0"]
 
     if bool_str(rot_enabled) == "true":
         det_cmd += ["--rotate", rot_maxval]
@@ -1174,8 +1116,7 @@ def train_model_submit():
             ds = hc.find_dataset(user_slug, mode, selected_collection)
             dataset_id = ds.get("dataset_id") if ds else None
             if mode == "detection":
-                augmentations = {"hue": hue_maxval, "saturation": sat_maxval,
-                                 "value": val_maxval, "flip": flp_prob, "rotate": rot_maxval}
+                augmentations = {"flip": flp_prob, "rotate": rot_maxval}
             else:
                 augmentations = {"blur": bool_str(blur_enabled), "scale": bool_str(scale_enabled),
                                  "rotate": bool_str(rotate_enabled), "flip": bool_str(flip_enabled)}

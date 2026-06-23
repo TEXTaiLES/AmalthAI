@@ -79,24 +79,7 @@ parser.add_argument(
     help="Epochs right range"
 )
 
-parser.add_argument(
-    "--hue", 
-    type=float,
-    default=0.5,
-    help="Hue augmentation factor"
-)
-parser.add_argument(
-    "--saturation",
-    type=float,
-    default=0.5,
-    help="Saturation augmentation factor"
-)
-parser.add_argument(
-    "--value",          
-    type=float,
-    default=0.5,
-    help="Value augmentation factor"
-)
+
 parser.add_argument(
     "--rotate", 
     type=int,
@@ -125,9 +108,6 @@ bs_left = args.bs_left
 epoch_right = args.epoch_right
 epoch_left = args.epoch_left
 
-hue = args.hue
-saturation = args.saturation
-value = args.value
 rotate = args.rotate
 flip = args.flip
 
@@ -146,7 +126,7 @@ if model_selection == "allmodels":
     all_success = True  # flag
 
     for model in models_list:
-        res = conduct_experiment_od(model, timestamp_path, dataset, lr_left, lr_right, bs_left, bs_right, epoch_left, epoch_right, hue, saturation, value, rotate, flip, user_slug)
+        res = conduct_experiment_od(model, timestamp_path, dataset, lr_left, lr_right, bs_left, bs_right, epoch_left, epoch_right, rotate, flip, user_slug)
         print(f"Last condition for {model}: {res}")
 
         if res != "Succeeded":
@@ -155,7 +135,7 @@ if model_selection == "allmodels":
     final_res = "Succeeded" if all_success else "Failed"
 
 else:
-    final_res = conduct_experiment_od(model_selection, timestamp_path, dataset, lr_left, lr_right, bs_left, bs_right, epoch_left, epoch_right, hue, saturation, value, rotate, flip, user_slug)
+    final_res = conduct_experiment_od(model_selection, timestamp_path, dataset, lr_left, lr_right, bs_left, bs_right, epoch_left, epoch_right, rotate, flip, user_slug)
     print(f"Last condition for {model_selection}: {final_res}")
 
 

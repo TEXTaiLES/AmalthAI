@@ -173,7 +173,7 @@ def conduct_experiment_seg(model_selection, timestamp_path, dataset, lr_left, lr
     # Return the last status type
     return last_status_type
 
-def conduct_experiment_od(model_selection, timestamp_path, dataset, lr_left, lr_right, bs_left, bs_right, epochs_left, epochs_right, hue, saturation, value, rotate, flip, user_slug):
+def conduct_experiment_od(model_selection, timestamp_path, dataset, lr_left, lr_right, bs_left, bs_right, epochs_left, epochs_right, rotate, flip, user_slug):
     basic_yolo_katib_experiment = {
         "apiVersion": "kubeflow.org/v1beta1",
         "kind": "Experiment",
@@ -243,9 +243,6 @@ def conduct_experiment_od(model_selection, timestamp_path, dataset, lr_left, lr_
                                             "--lr", "${trialParameters.learningRate}",
                                             "--dataset", dataset,
                                             "--timestamp", timestamp_path,
-                                            "--hue", str(hue),
-                                            "--saturation", str(saturation),
-                                            "--value", str(value),
                                             "--rotate", str(rotate),
                                             "--flip", str(flip)
                                         ],
@@ -289,9 +286,6 @@ def conduct_experiment_od(model_selection, timestamp_path, dataset, lr_left, lr_
         "--lr", "${trialParameters.learningRate}",
         "--dataset", dataset,
         "--timestamp", timestamp_path,
-        "--hue", str(hue),
-        "--saturation", str(saturation),
-        "--value", str(value),
         "--rotate", str(rotate),
         "--flip", str(flip)
     ]
