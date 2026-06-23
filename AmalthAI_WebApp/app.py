@@ -859,6 +859,11 @@ def train_model():
                 "default": config.get('defaults').get('cls_blur'),
                 "description": "Applies Gaussian blur to simulate motion or focus blur in images."
             },
+            "scale" : {
+                "type": "bool",
+                "default": config.get('defaults').get('cls_scale'),
+                "description": "Randomly scales images to different sizes for improved robustness."
+            },
             "rotate": {
                 "type"   : "bool",
                 "default": config.get('defaults').get('cls_rotate'),
@@ -1094,6 +1099,7 @@ def train_model_submit():
         "--blur", bool_str(blur_enabled),
         "--rotate", bool_str(rotate_enabled),
         "--flip", bool_str(flip_enabled),
+        "--scale", bool_str(scale_enabled),
         "--dataset_already_split", bool_str(cls_split_flag),
     ]
 

@@ -328,7 +328,7 @@ def conduct_experiment_od(model_selection, timestamp_path, dataset, lr_left, lr_
     # Return the last status type
     return last_status_type
 
-def conduct_experiment_cls(model_selection, timestamp_path, dataset, lr_left, lr_right, bs_left, bs_right, epochs_left, epochs_right, blur, rotate, flip, dataset_already_split, user_slug):
+def conduct_experiment_cls(model_selection, timestamp_path, dataset, lr_left, lr_right, bs_left, bs_right, epochs_left, epochs_right, blur, rotate, flip, scale, dataset_already_split, user_slug):
     basic_classification_katib_experiment = {
         "apiVersion": "kubeflow.org/v1beta1",
         "kind": "Experiment",
@@ -402,6 +402,7 @@ def conduct_experiment_cls(model_selection, timestamp_path, dataset, lr_left, lr
                                             "--blur", blur,
                                             "--rotate", rotate,
                                             "--flip", flip,
+                                            "--scale", scale,
                                             "--dataset_already_split", str(dataset_already_split).lower()
                                         ],
                                         "volumeMounts": [
@@ -448,6 +449,7 @@ def conduct_experiment_cls(model_selection, timestamp_path, dataset, lr_left, lr
         "--blur", str(blur).lower(),
         "--rotate", str(rotate).lower(),
         "--flip", str(flip).lower(),
+        "--scale", str(scale).lower(),
         "--dataset_already_split", str(dataset_already_split).lower()
     ]
 

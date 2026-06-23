@@ -4,12 +4,13 @@ from torch.utils.data import DataLoader, random_split
 import os
 
 class DatasetFactory:
-    def __init__(self, batch_size=64, val_split=0.3, blur=False, flip=False, rotate=False, dataset_already_split=False):
+    def __init__(self, batch_size=64, val_split=0.3, blur=False, flip=False, rotate=False, scale=False, dataset_already_split=False):
         self.batch_size = batch_size
         self.val_split = val_split
         self.use_blur = blur
         self.use_flip = flip
         self.use_rotate = rotate
+        self.use_scale = scale
         self.dataset_already_split = dataset_already_split
 
     def get_dataset(self, dataset_path):
@@ -27,6 +28,10 @@ class DatasetFactory:
         if self.use_blur:
             augmentations.append(transforms.GaussianBlur(kernel_size=3, sigma=(0.1, 2.0)))
             print("Using Gaussian Blur Augmentation")
+
+        if self.use_scale:
+            augmentations.append(transforms.RandomAffine(degrees=0, scale=(0.8, 1.2)))
+            print("Using Scaling Augmentation")
 
         augmentations.extend([
             transforms.ToTensor(),

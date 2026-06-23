@@ -18,6 +18,7 @@ def train(config):
         blur=config.blur,
         flip=config.flip,
         rotate=config.rotate,
+        scale=config.scale,
         dataset_already_split=config.dataset_already_split
     )
     train_loader, val_loader, num_classes, class_names = factory.get_dataset(config.dataset)
@@ -90,6 +91,7 @@ def parse_args():
     parser.add_argument('--blur', type=str, default='false', choices=['true', 'false'], help='Enable Gaussian blur augmentation')
     parser.add_argument('--flip', type=str, default='false', choices=['true', 'false'], help='Enable horizontal flip augmentation')
     parser.add_argument('--rotate', type=str, default='false', choices=['true', 'false'], help='Enable rotation augmentation')
+    parser.add_argument('--scale', type=str, default='false', choices=['true', 'false'], help='Enable scaling augmentation')
     parser.add_argument('--dataset_already_split', type=str, default='false', choices=['true', 'false'], help='Dataset has train/val folders')
 
     return parser.parse_args()
@@ -100,6 +102,7 @@ if __name__ == "__main__":
     args.blur = args.blur.lower() == 'true'
     args.flip = args.flip.lower() == 'true'
     args.rotate = args.rotate.lower() == 'true'
+    args.scale = args.scale.lower() == 'true'
     args.dataset_already_split = args.dataset_already_split.lower() == 'true'
 
     config = get_config(args)

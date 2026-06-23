@@ -101,6 +101,13 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    "--scale", 
+    type=str,
+    default="false",
+    help="Apply scale augmentation"
+)
+
+parser.add_argument(
     "--dataset_already_split",
     type=str,
     default="false",
@@ -124,6 +131,7 @@ epoch_left = args.epoch_left
 blur = args.blur
 rotate = args.rotate
 flip = args.flip
+scale = args.scale
 dataset_already_split = args.dataset_already_split
 
 def get_timestamp_path():
@@ -141,7 +149,7 @@ if model_selection == "allmodels":
     all_success = True  # flag
 
     for model in models_list:
-        res = conduct_experiment_cls(model, timestamp_path, dataset, lr_left, lr_right, bs_left, bs_right, epoch_left, epoch_right, blur, rotate, flip, dataset_already_split, user_slug)
+        res = conduct_experiment_cls(model, timestamp_path, dataset, lr_left, lr_right, bs_left, bs_right, epoch_left, epoch_right, blur, rotate, flip, scale, dataset_already_split, user_slug)
         print(f"Last condition for {model}: {res}")
 
         if res != "Succeeded":
@@ -150,7 +158,7 @@ if model_selection == "allmodels":
     final_res = "Succeeded" if all_success else "Failed"
 
 else:
-    final_res = conduct_experiment_cls(model_selection, timestamp_path, dataset, lr_left, lr_right, bs_left, bs_right, epoch_left, epoch_right, blur, rotate, flip, dataset_already_split, user_slug)
+    final_res = conduct_experiment_cls(model_selection, timestamp_path, dataset, lr_left, lr_right, bs_left, bs_right, epoch_left, epoch_right, blur, rotate, flip, scale, dataset_already_split, user_slug)
     print(f"Last condition for {model_selection}: {final_res}")
 
 

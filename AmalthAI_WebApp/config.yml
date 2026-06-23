@@ -29,6 +29,7 @@ defaults:
   cls_blur: true
   cls_rotate: true
   cls_flip: true
+  cls_scale: true
 
   seg_blur: true
   seg_scale: true
