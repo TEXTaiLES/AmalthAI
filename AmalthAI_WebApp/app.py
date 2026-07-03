@@ -80,6 +80,95 @@ def login():
 
     return render_template("login.html")
 
+import base64
+
+VLM_URL = "http://qwen-vlm:8000/v1/chat/completions"
+
+SYSTEM_PROMPT = """
+You are a visual analysis assistant helping cultural heritage experts understand microscope images from an experimental archaeology study.
+The images show clay imprints made by pressing textile samples (fibres and threads) into clay under controlled conditions.
+
+You will receive TWO images:
+1. Image 1 (raw): the actual microscope photograph of the clay imprint.
+2. Image 2 (Grad-CAM): a heatmap overlay showing where the classifier focused.
+
+"Rules:\n"
+    "- visible_description: describe ONLY what you see in Image 1. "
+    "Do NOT mention the heatmap or Grad-CAM here.\n"
+    "- attention_description: describe WHERE the heat in Image 2 is spatially "
+    "(center / edge / background / specific feature). "
+    "State whether it overlaps the textile imprint. Do NOT mention colors.\n"
+    "- Do NOT name any class, technique, or material type (no Drilling, Spinning, Nettle, Wool, etc.)\n"
+    "- Do NOT say the classifier was right or wrong.\n"
+    "- Do NOT describe the material or the background as concrete, stone, or fossil.\n"
+    "- Do NOT use information about classes, techniques, or materials to inform your descriptions.\n"
+    "Return ONLY valid JSON, 1-2 sentences per field:\n"
+    '{
+  "visible_description": "",
+  "attention_description": "",
+  "task_properties": {
+    "task": "",
+    "ground_truth": "",
+    "predicted_class": "",
+    "confidence": "",
+    "class_probabilities": {}
+  }
+}'
+"""
+
+@app.route('/vlm-chat', methods=['GET', 'POST'])
+@login_required
+def vlm_chat():
+    answer = None
+    images_data = []
+    if request.method == 'POST':
+        image_files = [request.files.get('image1'), request.files.get('image2')]
+        prompt = request.form.get('prompt')
+
+        if all(image_files) and prompt:
+            content = []
+            for img in image_files:
+                mime_type = img.mimetype or "image/jpeg"
+                img_b64 = base64.b64encode(img.read()).decode('utf-8')
+                images_data.append({"mime_type": mime_type, "image_b64": img_b64})
+                content.append({
+                    "type": "image_url",
+                    "image_url": {"url": f"data:{mime_type};base64,{img_b64}"}
+                })
+            content.append({"type": "text", "text": prompt})
+
+            payload = {
+                "model": "Qwen/Qwen2-VL-2B-Instruct",
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": SYSTEM_PROMPT
+                    },
+                    {
+                        "role": "user",
+                        "content": content
+                    }
+                ],
+                "max_tokens": 512
+            }
+
+            try:
+                resp = requests.post(VLM_URL, json=payload, timeout=120)
+                resp.raise_for_status()
+                data = resp.json()
+                if "choices" in data and data["choices"] and "message" in data["choices"][0]:
+                    answer = data["choices"][0]["message"]["content"]
+                else:
+                    flash(f"Unexpected VLM response: {data}", "error")
+            except requests.exceptions.ConnectionError:
+                flash("The analysis service is currently offline. Please contact an administrator to start it.", "error")
+            except requests.exceptions.RequestException as e:
+                flash(f"VLM request failed: {e}", "error")
+            except ValueError:
+                flash("VLM returned invalid JSON", "error")
+
+    return render_template('vlm_chat.html', answer=answer, images_data=images_data)
+
 @app.route("/logout")
 @login_required
 def logout():

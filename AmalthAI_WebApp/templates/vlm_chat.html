@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}VLM Chat{% endblock %}
+{% block content %}
+<div class="container mt-4" style="max-width: 700px;">
+    <h2 class="mb-4">LLM Assisted Inference</h2>
+
+    {% if answer %}
+    <div class="mb-3 text-center d-flex justify-content-center gap-2 flex-wrap">
+        {% for img in images_data %}
+        <img src="data:{{ img.mime_type }};base64,{{ img.image_b64 }}" alt="Analyzed image" class="img-thumbnail" style="max-height: 300px;">
+        {% endfor %}
+    </div>
+    <div class="card mb-4">
+        <div class="card-body">
+            <h6 class="card-subtitle mb-2 text-muted">Answer</h6>
+            <p class="card-text">{{ answer }}</p>
+        </div>
+    </div>
+    <a href="{{ url_for('vlm_chat') }}" class="btn btn-outline-primary mb-4">
+        <i class="bi bi-arrow-repeat me-1"></i> Start New Session
+    </a>
+
+    {% else %}
+    <form method="POST" enctype="multipart/form-data" id="vlmForm">
+
+        <div class="row">
+            <div class="col-6">
+                <div id="dropZone1" class="border border-2 border-dashed rounded p-3 text-center mb-3"
+                     style="cursor: pointer; transition: background-color 0.2s; border-color: #adb5bd; min-height: 180px;">
+                    <div id="dropZoneContent1">
+                        <i class="bi bi-cloud-arrow-up fs-1 text-secondary"></i>
+                        <p class="mb-1 mt-2 small">Image 1</p>
+                        <p class="text-muted small mb-0">click or drop</p>
+                    </div>
+                    <img id="imagePreview1" src="" alt="Preview 1" class="img-fluid rounded d-none" style="max-height: 160px;">
+                </div>
+                <input type="file" name="image1" id="imageInput1" accept="image/*" class="d-none" required>
+            </div>
+
+            <div class="col-6">
+                <div id="dropZone2" class="border border-2 border-dashed rounded p-3 text-center mb-3"
+                     style="cursor: pointer; transition: background-color 0.2s; border-color: #adb5bd; min-height: 180px;">
+                    <div id="dropZoneContent2">
+                        <i class="bi bi-cloud-arrow-up fs-1 text-secondary"></i>
+                        <p class="mb-1 mt-2 small">Image 2</p>
+                        <p class="text-muted small mb-0">click or drop</p>
+                    </div>
+                    <img id="imagePreview2" src="" alt="Preview 2" class="img-fluid rounded d-none" style="max-height: 160px;">
+                </div>
+                <input type="file" name="image2" id="imageInput2" accept="image/*" class="d-none" required>
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Prompt</label>
+            <textarea name="prompt" class="form-control" rows="3" placeholder="Ask about the fabric, weave, condition, materials..." required></textarea>
+        </div>
+
+        <button type="submit" class="btn btn-primary w-100" id="submitBtn">
+            <span id="submitSpinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+            <span id="submitText">Analyze</span>
+        </button>
+    </form>
+
+    <script>
+    function setupDropZone(zoneId, contentId, inputId, previewId) {
+        const dropZone = document.getElementById(zoneId);
+        const dropZoneContent = document.getElementById(contentId);
+        const input = document.getElementById(inputId);
+        const preview = document.getElementById(previewId);
+
+        function showPreview(file) {
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(ev) {
+                preview.src = ev.target.result;
+                preview.classList.remove('d-none');
+                dropZoneContent.classList.add('d-none');
+            };
+            reader.readAsDataURL(file);
+        }
+
+        dropZone.addEventListener('click', () => input.click());
+        input.addEventListener('change', function(e) {
+            showPreview(e.target.files[0]);
+        });
+        dropZone.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            dropZone.style.backgroundColor = '#f1f3f5';
+        });
+        dropZone.addEventListener('dragleave', function() {
+            dropZone.style.backgroundColor = '';
+        });
+        dropZone.addEventListener('drop', function(e) {
+            e.preventDefault();
+            dropZone.style.backgroundColor = '';
+            const file = e.dataTransfer.files[0];
+            if (file) {
+                input.files = e.dataTransfer.files;
+                showPreview(file);
+            }
+        });
+    }
+
+    setupDropZone('dropZone1', 'dropZoneContent1', 'imageInput1', 'imagePreview1');
+    setupDropZone('dropZone2', 'dropZoneContent2', 'imageInput2', 'imagePreview2');
+
+    document.getElementById('vlmForm').addEventListener('submit', function() {
+        document.getElementById('submitBtn').disabled = true;
+        document.getElementById('submitSpinner').classList.remove('d-none');
+        document.getElementById('submitText').textContent = 'Analyzing...';
+    });
+    </script>
+    {% endif %}
+</div>
+{% endblock %}
