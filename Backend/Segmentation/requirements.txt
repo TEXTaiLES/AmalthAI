@@ -5,3 +5,4 @@ tensorboard==2.14.0
 Pillow==10.4.0
 opencv-python==4.1.2.30
 scikit-image==0.21.0
+grad-cam==1.5.5

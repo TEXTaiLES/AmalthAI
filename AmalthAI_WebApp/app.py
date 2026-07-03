@@ -1511,6 +1511,16 @@ def inference():
                     expected_output  = f"{base_name}.txt"
                     output_file_path = os.path.join(output_data_dir, expected_output)
                     
+                    gradcam_filename = f"{base_name}_gradcam.jpg"
+                    gradcam_path = os.path.join(output_data_dir, gradcam_filename)
+
+                    gradcam_file = None
+                    if os.path.exists(gradcam_path):
+                        gradcam_file = url_for(
+                            "user_inference_files",
+                            filename=f"classification/outputs/{model_id}/{timestamp}/{gradcam_filename}"
+                        )
+
                     output_text = None
                     if os.path.exists(output_file_path):
                         # Read the output text
@@ -1522,6 +1532,7 @@ def inference():
                     results.append({
                         'input_file' : input_file,
                         'output_text': output_text,
+                        'gradcam_file': gradcam_file,
                         'filename'   : filename
                     })
 
