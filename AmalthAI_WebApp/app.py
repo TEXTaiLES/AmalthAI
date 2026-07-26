@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory, g, session
-from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from flask_login import login_required, logout_user, current_user
 from werkzeug.utils import secure_filename
 import tomllib
 import math
@@ -15,7 +15,7 @@ import docker
 import zipfile
 import requests
 from datetime import datetime
-from urllib.parse import urlparse
+from utils.auth import init_auth
 from utils.models_page import write_results
 from utils.helpers import load_datasets, load_models_available, load_dataset_info, get_max_image_size, load_models, get_best_timestamp
 from utils.load_config import load_config, chown_target
@@ -27,193 +27,6 @@ client = docker.from_env()
 app = Flask(__name__)
 app.secret_key = 'supersecret'
 app.config.from_file('config.toml', load=tomllib.load, text=False)
-
-# Login requirements
-login_manager = LoginManager()
-login_manager.init_app(app)
-login_manager.login_view = "login"
-
-# Lightweight in-memory user registry (per process)
-_user_registry = {}
-
-
-class User(UserMixin):
-    def __init__(self, user_id, email=None, slug=None, full_name=None):
-        self.id = user_id
-        self.email = email
-        self.slug = slug
-        self.full_name = full_name
-
-@login_manager.user_loader
-def load_user(user_id):
-    return _user_registry.get(str(user_id))
-
-
-def _auth_cookie_domain():
-    directus_base_url = config.get("directus", {}).get("base_url") or ""
-    hostname = urlparse(directus_base_url).hostname or ""
-    if hostname:
-        return f".{hostname}"
-    return None
-
-
-def _auth_cookie_secure():
-    return request.is_secure or request.headers.get("X-Forwarded-Proto") == "https"
-
-
-def _directus_payload(resp):
-    try:
-        data = resp.json()
-    except Exception:
-        return {}
-    return data.get("data") or data or {}
-
-
-def _register_user(email, slug=None, full_name=None):
-    if not email:
-        return None
-
-    slug = slug or safe_user_slug(email)
-    user = _user_registry.get(str(slug))
-    if user is None:
-        user = User(
-            user_id=slug,
-            email=email,
-            slug=slug,
-            full_name=full_name or f"@{slug}",
-        )
-        _user_registry[str(user.id)] = user
-
-    ensure_user_folders(slug)
-    session["user_email"] = email
-    session["user_slug"] = slug
-    login_user(user)
-    return user
-
-
-def _store_shared_auth(tokens):
-    access_token = tokens.get("access_token")
-    refresh_token = tokens.get("refresh_token")
-
-    expires_ms = tokens.get("expires")
-    try:
-        expires_sec = float(expires_ms) / 1000.0 if expires_ms else 900.0
-    except (TypeError, ValueError):
-        expires_sec = 900.0
-
-    if access_token:
-        session["access_token"] = access_token
-        session["access_expires_at"] = datetime.now().timestamp() + expires_sec
-        g.access_token = access_token
-
-    if refresh_token:
-        g.new_refresh_token = refresh_token
-
-
-def _cached_access_token():
-    token = session.get("access_token")
-    expires_at = session.get("access_expires_at")
-    if not token or not expires_at:
-        return None
-    if datetime.now().timestamp() >= float(expires_at) - 30:
-        return None
-    return token
-
-
-def _fetch_current_identity(access_token):
-    try:
-        resp = requests.get(
-            f"{DIRECTUS_BASE_URL}/users/me",
-            headers={"Authorization": f"Bearer {access_token}"},
-            timeout=8,
-        )
-    except Exception as exc:
-        app.logger.warning(f"Directus users/me failed: {exc}")
-        return None
-
-    if not resp.ok:
-        return None
-
-    data = resp.json().get("data", {})
-    email = data.get("email") or session.get("user_email")
-    slug = safe_user_slug(email) if email else session.get("user_slug")
-    if email:
-        _register_user(email, slug=slug, full_name=f"@{slug}")
-    return email
-
-
-@app.before_request
-def shared_cookie_auth_gate():
-    path = request.path
-    if path.startswith("/static/"):
-        return None
-
-    g.new_refresh_token = None
-    g.clear_refresh_cookie = False
-
-    if current_user.is_authenticated:
-        return None
-
-    token = _cached_access_token()
-    if token:
-        g.access_token = token
-        email = session.get("user_email") or _fetch_current_identity(token)
-        if email:
-            _register_user(email, slug=session.get("user_slug") or safe_user_slug(email))
-        return None
-
-    refresh_token = request.cookies.get(SHARED_REFRESH_COOKIE_NAME)
-    if not refresh_token:
-        return None
-
-    try:
-        resp = requests.post(
-            f"{DIRECTUS_BASE_URL}/auth/refresh",
-            json={"refresh_token": refresh_token},
-            timeout=8,
-        )
-    except Exception as exc:
-        app.logger.warning(f"Directus refresh failed: {exc}")
-        g.clear_refresh_cookie = True
-        session.clear()
-        return None
-
-    if not resp.ok:
-        g.clear_refresh_cookie = True
-        session.clear()
-        return None
-
-    tokens = _directus_payload(resp)
-    _store_shared_auth(tokens)
-
-    email = _fetch_current_identity(session.get("access_token"))
-    if email:
-        _register_user(email, slug=session.get("user_slug") or safe_user_slug(email))
-
-    return None
-
-
-@app.after_request
-def shared_cookie_after_request(resp):
-    domain = _auth_cookie_domain()
-
-    if getattr(g, "clear_refresh_cookie", False):
-        resp.delete_cookie(SHARED_REFRESH_COOKIE_NAME, path="/", domain=domain)
-        return resp
-
-    new_refresh_token = getattr(g, "new_refresh_token", None)
-    if new_refresh_token:
-        resp.set_cookie(
-            SHARED_REFRESH_COOKIE_NAME,
-            new_refresh_token,
-            httponly=True,
-            secure=_auth_cookie_secure(),
-            samesite="Lax",
-            path="/",
-            domain=domain,
-        )
-
-    return resp
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -334,6 +147,23 @@ def ensure_user_folders(slug):
     ensure_model_db_file(os.path.join(root, "models_db", "trained_models_db_segm.csv"))
     ensure_model_db_file(os.path.join(root, "models_db", "trained_models_db_od.csv"))
     ensure_model_db_file(os.path.join(root, "models_db", "trained_models_db_cls.csv"))
+
+
+auth_helpers = init_auth(
+    app,
+    directus_base_url=DIRECTUS_BASE_URL,
+    refresh_cookie_name=SHARED_REFRESH_COOKIE_NAME,
+    safe_user_slug=safe_user_slug,
+    ensure_user_folders=ensure_user_folders,
+)
+
+_register_user = auth_helpers["register_user"]
+_store_shared_auth = auth_helpers["store_shared_auth"]
+_cached_access_token = auth_helpers["cached_access_token"]
+_fetch_current_identity = auth_helpers["fetch_current_identity"]
+_auth_cookie_domain = auth_helpers["auth_cookie_domain"]
+_auth_cookie_secure = auth_helpers["auth_cookie_secure"]
+_directus_payload = auth_helpers["directus_payload"]
 
 
 def _job_status_path(user_slug, job_id):
