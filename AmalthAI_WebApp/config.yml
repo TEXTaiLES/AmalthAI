@@ -17,6 +17,9 @@ hestia:
   enabled: true
   base_url: HESTIA_URL
 
+textailes-token:
+  token: textailes_token
+
 defaults:
   pager_size: 30
   lr_lower: 0.001
