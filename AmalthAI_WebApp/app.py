@@ -1,25 +1,25 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory, g, session
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from werkzeug.utils import secure_filename
 import tomllib
 import math
 import os
-from werkzeug.utils import secure_filename
 import subprocess
 import glob
 import csv
-from datetime import datetime
 import shutil
 import threading
 import json
 import uuid
+import docker
+import zipfile
+import requests
+from datetime import datetime
+from urllib.parse import urlparse
 from utils.models_page import write_results
 from utils.helpers import load_datasets, load_models_available, load_dataset_info, get_max_image_size, load_models, get_best_timestamp
 from utils.load_config import load_config
 from utils import hestia_client as hc
-import docker
-import zipfile
-from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
-import requests
-from urllib.parse import urlparse
 
 
 client = docker.from_env()
