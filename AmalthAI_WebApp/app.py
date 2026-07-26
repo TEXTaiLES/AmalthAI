@@ -18,7 +18,7 @@ from datetime import datetime
 from urllib.parse import urlparse
 from utils.models_page import write_results
 from utils.helpers import load_datasets, load_models_available, load_dataset_info, get_max_image_size, load_models, get_best_timestamp
-from utils.load_config import load_config
+from utils.load_config import load_config, chown_target
 from utils import hestia_client as hc
 
 
@@ -1457,7 +1457,7 @@ def inference():
                     ])
 
                     container.exec_run([
-                        "chown", "-R", "1003:1003", f"/data/{user_slug}/inference/segmentation/outputs/"
+                        "chown", "-R", chown_target(config), f"/data/{user_slug}/inference/segmentation/outputs/"
                     ])
 
                 finally:
@@ -1565,9 +1565,8 @@ def inference():
                         "--output", f"/data/{user_slug}/inference/detection/outputs/{model_id}/{timestamp}/",
                     ])
 
-                    # ownership fix
                     container.exec_run([
-                        "chown", "-R", "1003:1003", "/data/"
+                        "chown", "-R", chown_target(config), "/data/"
                     ])
 
                 finally:
@@ -1663,9 +1662,8 @@ def inference():
                             "--output_dir", f"/data/{user_slug}/inference/classification/outputs/{model_id}/{timestamp}/"
                         ])
 
-                        # Fix permissions
                         container.exec_run([
-                            "chown", "-R", "1003:1003", f"/data/{user_slug}/inference/classification/outputs/"
+                            "chown", "-R", chown_target(config), f"/data/{user_slug}/inference/classification/outputs/"
                         ])
 
                     finally:
