@@ -14,6 +14,7 @@ import uuid
 import docker
 import zipfile
 import requests
+from urllib.parse import quote
 from datetime import datetime
 from utils.auth import init_auth
 from utils.models_page import write_results
@@ -33,28 +34,9 @@ def login():
     if current_user.is_authenticated:
         return redirect(url_for("index"))
 
-    if request.method == "POST":
-        username = request.form.get("username")
-        password = request.form.get("password")
-
-        resp = requests.post(
-            f"{DIRECTUS_BASE_URL}/auth/login",
-            json={
-                "email": username,
-                "password": password
-            },
-            headers={"Content-Type": "application/json"}
-        )
-        app.logger.info(f"Login response status: {resp.status_code}, body: {resp.text}")
-        if resp.ok:
-            tokens = _directus_payload(resp)
-            _store_shared_auth(tokens)
-            _register_user(username, slug=safe_user_slug(username), full_name=f"@{safe_user_slug(username)}")
-            return redirect(url_for("index"))
-
-        flash("Wrong Credentials.")
-
-    return render_template("login.html")
+    next_path = request.args.get("next") or url_for("index")
+    target = request.host_url.rstrip("/") + next_path
+    return redirect(f"{DIRECTUS_LOGIN_URL}?redirect_url={quote(target, safe='')}")
 
 @app.route("/logout")
 @login_required
@@ -71,6 +53,7 @@ def logout():
 config = load_config("config.yml")
 
 DIRECTUS_BASE_URL = config.get("directus", {}).get("base_url")
+DIRECTUS_LOGIN_URL = config.get("directus", {}).get("login_url")
 SHARED_REFRESH_COOKIE_NAME = config.get("textailes-token", {}).get("token")
 
 BASE_HOST_PATH      = config.get("paths").get("base_host_path")

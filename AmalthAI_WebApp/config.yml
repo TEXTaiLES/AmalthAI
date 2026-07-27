@@ -12,6 +12,7 @@ kubeflow:
 
 directus:
   base_url: DIRECTUS_URL
+  login_url: DIRECTUS_LOGIN_URL
 
 hestia:
   enabled: true
