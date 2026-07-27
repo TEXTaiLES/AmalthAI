@@ -1129,6 +1129,20 @@ def train_status(job_id):
         return jsonify({"error": "job_not_found"}), 404
     return jsonify(status)
 
+@app.route('/train_jobs/active', methods=["GET"])
+@login_required
+def active_train_jobs():
+    user_slug = get_current_user_slug()
+    jobs_dir = os.path.join(user_root(user_slug), "train_jobs")
+    active = []
+    for path in glob.glob(os.path.join(jobs_dir, "*.json")):
+        job_id = os.path.splitext(os.path.basename(path))[0]
+        status = _read_job_status(user_slug, job_id)
+        if status and status.get("status") == "running":
+            status["job_id"] = job_id
+            active.append(status)
+    return jsonify(active)
+
 
 def _persist_inference_to_hestia(user_slug, mode, model_id, model_name, dataset_name,
                                  files, save_dir, output_map, color_table):

@@ -320,10 +320,16 @@ document.addEventListener("DOMContentLoaded", () => {
         }, 4000);
     }
 
-    const existingJobId = localStorage.getItem("trainingJobId");
-    if (existingJobId) {
-        refreshTrainingLock(existingJobId);
-        startStatusPolling(existingJobId);
-    }
+    fetch("/train_jobs/active")
+    .then(res => res.ok ? res.json() : [])
+    .then(jobs => {
+        if (jobs && jobs.length > 0) {
+            const jobId = jobs[0].job_id;
+            localStorage.setItem("trainingJobId", jobId);
+            refreshTrainingLock(jobId);
+            startStatusPolling(jobId);
+        }
+    })
+    .catch(err => console.error("Active jobs check failed:", err));
 
 });
