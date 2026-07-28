@@ -5,6 +5,7 @@ import tomllib
 import math
 import os
 import subprocess
+import time
 import glob
 import csv
 import shutil
@@ -149,8 +150,34 @@ _auth_cookie_secure = auth_helpers["auth_cookie_secure"]
 _directus_payload = auth_helpers["directus_payload"]
 
 
+# If a "running" job hasn't updated its heartbeat within this many seconds,
+# we treat it as dead (e.g. platform/container crashed mid-training).
+TRAIN_JOB_HEARTBEAT_INTERVAL = 15
+TRAIN_JOB_STALE_TIMEOUT = 90  # 6x the heartbeat interval
+
+
 def _job_status_path(user_slug, job_id):
     return os.path.join(user_root(user_slug), "train_jobs", f"{job_id}.json")
+
+
+def _mark_stale_if_dead(user_slug, job_id, status):
+    """If status is 'running' but its heartbeat is too old, rewrite it as
+    'failed' on disk and return the corrected status. Otherwise return as-is."""
+    if not status or status.get("status") != "running":
+        return status
+
+    last_heartbeat = status.get("last_heartbeat")
+    if last_heartbeat is None:
+        stale = True
+    else:
+        stale = (time.time() - last_heartbeat) > TRAIN_JOB_STALE_TIMEOUT
+
+    if stale:
+        status["status"] = "failed"
+        status["error"] = "Training lost contact with the server (no heartbeat)."
+        _write_job_status(user_slug, job_id, status)
+
+    return status
 
 
 def _write_job_status(user_slug, job_id, data):
@@ -177,7 +204,22 @@ def _run_training_job(user_slug, job_id, cmd, mode, paths):
     owner_email = prior.get("owner_email")
 
     try:
-        process = subprocess.run(cmd)
+        proc = subprocess.Popen(cmd)
+
+        # Poll instead of blocking so we can periodically persist a heartbeat.
+        # If this loop stops running (process killed, container crashed, host
+        # dies), the json on disk simply stops getting fresh timestamps, and
+        # _mark_stale_if_dead() will later notice and flip it to "failed".
+        while True:
+            returncode = proc.poll()
+            if returncode is not None:
+                break
+            prior["status"] = "running"
+            prior["last_heartbeat"] = time.time()
+            _write_job_status(user_slug, job_id, prior)
+            time.sleep(TRAIN_JOB_HEARTBEAT_INTERVAL)
+
+        process = subprocess.CompletedProcess(cmd, returncode)
         if process.returncode == 0:
             write_results(*paths[mode])
             status = {"status": "succeeded", "return_code": process.returncode}
@@ -1071,7 +1113,7 @@ def train_model_submit():
     }
     
     job_id = str(uuid.uuid4())
-    job_status = {"status": "running", "mode": mode}
+    job_status = {"status": "running", "mode": mode, "last_heartbeat": time.time()}
 
     # HESTIA: rehydrate the dataset into the local cache (so the Katib job's
     # hostPath mount sees it) and record the experiment. Non-fatal.
@@ -1127,6 +1169,7 @@ def train_status(job_id):
     status = _read_job_status(user_slug, job_id)
     if not status:
         return jsonify({"error": "job_not_found"}), 404
+    status = _mark_stale_if_dead(user_slug, job_id, status)
     return jsonify(status)
 
 @app.route('/train_jobs/active', methods=["GET"])
@@ -1138,6 +1181,7 @@ def active_train_jobs():
     for path in glob.glob(os.path.join(jobs_dir, "*.json")):
         job_id = os.path.splitext(os.path.basename(path))[0]
         status = _read_job_status(user_slug, job_id)
+        status = _mark_stale_if_dead(user_slug, job_id, status)
         if status and status.get("status") == "running":
             status["job_id"] = job_id
             active.append(status)
