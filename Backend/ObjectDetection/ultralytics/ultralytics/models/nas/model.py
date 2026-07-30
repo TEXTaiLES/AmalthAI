@@ -70,7 +70,7 @@ class NAS(Model):
         self.model.forward = new_forward
 
         # Standardize model attributes for compatibility
-        self.model.fuse = lambda verbose=True: self.model
+        self.model.fuse = lambda verbose=True, imgsz=640: self.model
         self.model.stride = torch.tensor([32])
         self.model.names = dict(enumerate(self.model._class_names))
         self.model.is_fused = lambda: False  # for info()
@@ -80,7 +80,7 @@ class NAS(Model):
         self.model.args = {**DEFAULT_CFG_DICT, **self.overrides}  # for export()
         self.model.eval()
 
-    def info(self, detailed: bool = False, verbose: bool = True) -> dict[str, Any]:
+    def info(self, detailed: bool = False, verbose: bool = True) -> tuple:
         """Log model information.
 
         Args:

@@ -1,4 +1,5 @@
 ---
+title: utils.callbacks.hub API Reference
 description: Explore detailed guides on Ultralytics callbacks, including pretrain, model save, train start/end, and more. Enhance your ML training workflows with ease.
 keywords: Ultralytics, callbacks, pretrain, model save, train start, train end, validation, predict, export, training, machine learning
 ---
@@ -28,21 +29,5 @@ keywords: Ultralytics, callbacks, pretrain, model save, train start, train end, 
 <br><br><hr><br>
 
 ## ::: ultralytics.utils.callbacks.hub.on_train_end
-
-<br><br><hr><br>
-
-## ::: ultralytics.utils.callbacks.hub.on_train_start
-
-<br><br><hr><br>
-
-## ::: ultralytics.utils.callbacks.hub.on_val_start
-
-<br><br><hr><br>
-
-## ::: ultralytics.utils.callbacks.hub.on_predict_start
-
-<br><br><hr><br>
-
-## ::: ultralytics.utils.callbacks.hub.on_export_start
 
 <br><br>

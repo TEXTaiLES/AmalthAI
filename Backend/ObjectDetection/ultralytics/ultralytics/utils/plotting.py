@@ -18,6 +18,25 @@ from ultralytics.utils.checks import check_font, check_version, is_ascii
 from ultralytics.utils.files import increment_path
 
 
+def _gaussian_filter1d(y, sigma: int = 3, truncate: float = 4.0) -> np.ndarray:
+    """Smooth a 1D array with a Gaussian kernel (NumPy replacement for scipy.ndimage.gaussian_filter1d).
+
+    Args:
+        y (np.ndarray): Input 1D array to smooth.
+        sigma (int): Standard deviation of the Gaussian kernel.
+        truncate (float): Truncate the kernel at this many standard deviations.
+
+    Returns:
+        (np.ndarray): Smoothed 1D array with the same length as the input.
+    """
+    y = np.asarray(y, dtype=float)
+    radius = int(truncate * sigma + 0.5)
+    kernel = np.exp(-0.5 * (np.arange(-radius, radius + 1) / sigma) ** 2)
+    kernel /= kernel.sum()
+    # scipy 'reflect' boundary mode is equivalent to NumPy 'symmetric'
+    return np.convolve(np.pad(y, radius, mode="symmetric"), kernel, mode="valid")
+
+
 class Colors:
     """Ultralytics color palette for visualization and plotting.
 
@@ -92,7 +111,7 @@ class Colors:
     """
 
     def __init__(self):
-        """Initialize colors as hex = matplotlib.colors.TABLEAU_COLORS.values()."""
+        """Initialize the Ultralytics color palette from a fixed list of hex color codes."""
         hexs = (
             "042AFF",
             "0BDBEB",
@@ -165,11 +184,88 @@ class Colors:
 colors = Colors()  # create instance for 'from utils.plots import colors'
 
 
+# Spectral_r anchors (RGB, far→near) baked into a LUT so colorize_depth needs no matplotlib import.
+_SPECTRAL_R_ANCHORS = np.array(
+    [
+        [94, 79, 162],
+        [51, 135, 188],
+        [102, 194, 165],
+        [170, 220, 164],
+        [230, 245, 152],
+        [255, 254, 190],
+        [254, 224, 139],
+        [253, 173, 96],
+        [244, 109, 67],
+        [212, 61, 79],
+        [158, 1, 66],
+    ],
+    dtype=np.float32,
+)
+
+
+def _spectral_lut() -> np.ndarray:
+    """Build the 256x1x3 BGR uint8 Spectral_r LUT for cv2.applyColorMap by linearly interpolating the anchors."""
+    xs = np.linspace(0.0, 10.0, 256)
+    i = np.clip(xs.astype(int), 0, 9)
+    f = (xs - i)[:, None]
+    rgb = _SPECTRAL_R_ANCHORS[i] * (1.0 - f) + _SPECTRAL_R_ANCHORS[i + 1] * f
+    return rgb.round().astype(np.uint8)[:, ::-1].reshape(256, 1, 3)  # RGB→BGR for cv2 convention
+
+
+_SPECTRAL_LUT = _spectral_lut()
+_DEPTH_CMAPS = {"inferno": cv2.COLORMAP_INFERNO, "jet": cv2.COLORMAP_JET, "spectral": None}
+
+
+def colorize_depth(
+    depth: np.ndarray,
+    vmin: float | None = None,
+    vmax: float | None = None,
+    cmap: str = "jet",
+    mode: str = "disparity",
+) -> np.ndarray:
+    """Map a (H, W) metric-depth array to a BGR uint8 colorized image, invalid (<= 0) pixels black.
+
+    Args:
+        depth (np.ndarray): (H, W) depth in meters.
+        vmin (float, optional): Lower bound of the color range; defaults to the valid-pixel minimum (metric mode) or the
+            2nd disparity percentile (disparity mode).
+        vmax (float, optional): Upper bound of the color range; defaults to the valid-pixel maximum (metric mode) or the
+            98th disparity percentile (disparity mode).
+        cmap (str): Colormap, one of "inferno", "jet", "spectral" (matplotlib Spectral_r, near = warm).
+        mode (str): "metric" normalizes depth linearly; "disparity" normalizes inverse depth (1/d) between the 2nd and
+            98th percentiles for the DepthAnything look (near objects warm, robust to far outliers).
+
+    Returns:
+        (np.ndarray): (H, W, 3) BGR uint8 colorized depth.
+    """
+    d = np.asarray(depth, dtype=np.float32)
+    valid = d > 0
+    v = np.where(valid, 1.0 / np.where(valid, d, 1.0), 0.0) if mode == "disparity" else d
+    if vmin is None or vmax is None:
+        pool = v[valid]
+        if mode == "disparity":
+            lo, hi = np.percentile(pool, (2, 98)) if pool.size else (0.0, 1.0)
+        else:
+            lo, hi = (float(pool.min()), float(pool.max())) if pool.size else (0.0, 1.0)
+        vmin = lo if vmin is None else vmin
+        vmax = hi if vmax is None else vmax
+    if vmax <= vmin:
+        vmax = vmin + 1e-6
+    dn = np.clip((v - vmin) / (vmax - vmin), 0.0, 1.0)
+    idx = (dn * 255).astype(np.uint8)
+    lut = _SPECTRAL_LUT if cmap == "spectral" else None
+    color = cv2.applyColorMap(idx, lut) if lut is not None else cv2.applyColorMap(idx, _DEPTH_CMAPS[cmap])  # BGR
+    color[~valid] = 0
+    return color
+
+
 class Annotator:
     """Ultralytics Annotator for train/val mosaics and JPGs and predictions annotations.
 
+    Tensor images must be contiguous HWC BGR uint8.
+
     Attributes:
-        im (Image.Image | np.ndarray): The image to annotate.
+        im (Image.Image | np.ndarray | torch.Tensor): The image to annotate.
         pil (bool): Whether to use PIL or cv2 for drawing annotations.
         font (ImageFont.truetype | ImageFont.load_default): Font used for text annotations.
         lw (int): Line width for drawing.
@@ -198,8 +294,15 @@ class Annotator:
         """Initialize the Annotator class with image and line width along with color palette for keypoints and limbs."""
         non_ascii = not is_ascii(example)  # non-latin labels, i.e. asian, arabic, cyrillic
         input_is_pil = isinstance(im, Image.Image)
+        input_is_tensor = isinstance(im, torch.Tensor)
         self.pil = pil or non_ascii or input_is_pil
         self.lw = line_width or max(round(sum(im.size if input_is_pil else im.shape) / 2 * 0.003), 2)
+        if input_is_tensor:
+            assert im.ndim == 3 and im.shape[2] == 3 and im.dtype == torch.uint8, (
+                f"Expected HWC uint8 tensor image with 3 channels, but got shape {tuple(im.shape)} and dtype {im.dtype}."
+            )
+            if self.pil or im.device.type == "cpu":
+                im, input_is_tensor = im.cpu().numpy(), False
         if not input_is_pil:
             if im.shape[2] == 1:  # handle grayscale
                 im = cv2.cvtColor(im, cv2.COLOR_GRAY2BGR)
@@ -222,8 +325,10 @@ class Annotator:
             if check_version(pil_version, "9.2.0"):
                 self.font.getsize = lambda x: self.font.getbbox(x)[2:4]  # text width, height
         else:  # use cv2
-            assert im.data.contiguous, "Image not contiguous. Apply np.ascontiguousarray(im) to Annotator input images."
-            self.im = im if im.flags.writeable else im.copy()
+            assert im.is_contiguous() if input_is_tensor else im.data.contiguous, (
+                "Image not contiguous. Apply contiguous() or np.ascontiguousarray(im) to Annotator input images."
+            )
+            self.im = im if input_is_tensor or im.flags.writeable else im.copy()
             self.tf = max(self.lw - 1, 1)  # font thickness
             self.sf = self.lw / 3  # font scale
         # Pose
@@ -314,8 +419,9 @@ class Annotator:
             >>> annotator = Annotator(im0, line_width=10)
             >>> annotator.box_label(box=[10, 20, 30, 40], label="person")
         """
+        self._to_numpy()
         txt_color = self.get_txt_color(color, txt_color)
-        if isinstance(box, torch.Tensor):
+        if isinstance(box, (torch.Tensor, np.ndarray)):
             box = box.tolist()
 
         multi_points = isinstance(box[0], list)  # multiple points with shape (n, 2)
@@ -360,54 +466,86 @@ class Annotator:
                     lineType=cv2.LINE_AA,
                 )
 
-    def masks(self, masks, colors, im_gpu: torch.Tensor = None, alpha: float = 0.5, retina_masks: bool = False):
+    def masks(self, masks, colors, alpha: float = 0.5):
         """Plot masks on image.
 
         Args:
             masks (torch.Tensor | np.ndarray): Predicted masks with shape [n, h, w].
-            colors (list[list[int]]): Colors for predicted masks, [[r, g, b] * n].
-            im_gpu (torch.Tensor | None): Image on GPU with shape [3, h, w], range [0, 1].
+            colors (list[list[int]]): BGR colors for predicted masks, [[b, g, r] * n], matching `self.im`.
             alpha (float, optional): Mask transparency: 0.0 fully transparent, 1.0 opaque.
-            retina_masks (bool, optional): Whether to use high resolution masks or not.
         """
         if self.pil:
             # Convert to numpy first
             self.im = np.asarray(self.im).copy()
-        if im_gpu is None:
-            assert isinstance(masks, np.ndarray), "`masks` must be a np.ndarray if `im_gpu` is not provided."
+        if isinstance(masks, np.ndarray):
+            self._to_numpy()
             overlay = self.im.copy()
             for i, mask in enumerate(masks):
                 overlay[mask.astype(bool)] = colors[i]
             self.im = cv2.addWeighted(self.im, 1 - alpha, overlay, alpha, 0)
-        else:
-            assert isinstance(masks, torch.Tensor), "'masks' must be a torch.Tensor if 'im_gpu' is provided."
-            if len(masks) == 0:
-                self.im[:] = im_gpu.permute(1, 2, 0).contiguous().cpu().numpy() * 255
-                return
-            if im_gpu.device != masks.device:
-                im_gpu = im_gpu.to(masks.device)
-
-            ih, iw = self.im.shape[:2]
-            if not retina_masks:
-                # Use scale_masks to properly remove padding and upsample, convert bool to float first
-                masks = ops.scale_masks(masks[None].float(), (ih, iw))[0] > 0.5
-                # Convert original BGR image to RGB tensor
-                im_gpu = (
-                    torch.from_numpy(self.im).to(masks.device).permute(2, 0, 1).flip(0).contiguous().float() / 255.0
-                )
-
-            colors = torch.tensor(colors, device=masks.device, dtype=torch.float32) / 255.0  # shape(n,3)
+        elif len(masks):
+            # Use scale_masks to properly remove padding and upsample, convert bool to float first
+            tensor_image = isinstance(self.im, torch.Tensor)
+            device = self.im.device if tensor_image else masks.device
+            masks = ops.scale_masks(masks[None].to(device).float(), self.im.shape[:2])[0] > 0.5
+            colors = torch.tensor(colors, device=device, dtype=torch.float32) / 255.0  # shape(n,3)
             colors = colors[:, None, None]  # shape(n,1,1,3)
             masks = masks.unsqueeze(3)  # shape(n,h,w,1)
-            masks_color = masks * (colors * alpha)  # shape(n,h,w,3)
-            inv_alpha_masks = (1 - masks * alpha).cumprod(0)  # shape(n,h,w,1)
-            mcs = masks_color.max(dim=0).values  # shape(h,w,3)
-
-            im_gpu = im_gpu.flip(dims=[0]).permute(1, 2, 0).contiguous()  # shape(h,w,3)
-            im_gpu = im_gpu * inv_alpha_masks[-1] + mcs
-            self.im[:] = (im_gpu * 255).byte().cpu().numpy()
+            # prod/amax rather than cumprod[-1]/max().values: same result without the (n,h,w,*) intermediates
+            mcs = (masks * (colors * alpha)).amax(0)  # shape(h,w,3)
+            inv_alpha_masks = (1 - masks * alpha).prod(0)  # shape(h,w,1)
+            im = (self.im if tensor_image else torch.from_numpy(self.im)).to(device).float() / 255.0
+            im = ((im * inv_alpha_masks + mcs) * 255).byte()
+            self.im[:] = im if tensor_image else im.cpu().numpy()
         if self.pil:
             # Convert im back to PIL and update draw
+            self.fromarray(self.im)
+
+    def semantic_mask(self, mask, alpha: float = 0.5, ignore_index: int = 255):
+        """Plot a semantic segmentation mask on the image.
+
+        Args:
+            mask (np.ndarray): Semantic mask with shape [h, w] containing integer class indices.
+            alpha (float, optional): Mask transparency: 0.0 fully transparent, 1.0 opaque.
+            ignore_index (int, optional): Class index to ignore (e.g., 255 for void/ignore).
+        """
+        self._to_numpy()
+        if self.pil:
+            # Convert to numpy first
+            self.im = np.asarray(self.im).copy()
+        overlay = np.zeros_like(self.im)
+        for cls_id in np.unique(mask):
+            if cls_id == ignore_index:
+                continue
+            overlay[mask == cls_id] = colors(int(cls_id), True)
+        self.im = cv2.addWeighted(self.im, 1 - alpha, overlay, alpha, 0)
+        if self.pil:
+            # Convert im back to PIL and update draw
+            self.fromarray(self.im)
+
+    def depth_map(
+        self,
+        depth: np.ndarray,
+        alpha: float = 0.6,
+        cmap: str = "jet",
+        mode: str = "disparity",
+    ) -> None:
+        """Render a colorized depth map blended over the image.
+
+        Args:
+            depth (np.ndarray): (H, W) depth in meters.
+            alpha (float): Blend factor for the heatmap overlay.
+            cmap (str): Colormap, one of "inferno", "jet", "spectral". See `colorize_depth`.
+            mode (str): "metric" or "disparity" normalization. See `colorize_depth`.
+        """
+        self._to_numpy()
+        if self.pil:
+            self.im = np.asarray(self.im).copy()
+        heat = colorize_depth(depth, cmap=cmap, mode=mode)  # BGR, matching the Annotator buffer convention
+        if heat.shape[:2] != self.im.shape[:2]:
+            heat = cv2.resize(heat, (self.im.shape[1], self.im.shape[0]))
+        self.im = cv2.addWeighted(self.im, 1 - alpha, heat, alpha, 0)
+        if self.pil:
             self.fromarray(self.im)
 
     def kpts(
@@ -435,6 +573,7 @@ class Annotator:
             - If self.pil is True, converts image to numpy array and back to PIL.
         """
         radius = radius if radius is not None else self.lw
+        self._to_numpy()
         if self.pil:
             # Convert to numpy first
             self.im = np.asarray(self.im).copy()
@@ -491,6 +630,7 @@ class Annotator:
             anchor (str, optional): Text anchor position ('top' or 'bottom').
             box_color (tuple, optional): Box background color with optional alpha.
         """
+        self._to_numpy()
         if self.pil:
             w, h = self.font.getsize(text)
             if anchor == "bottom":  # start y from font bottom
@@ -516,14 +656,20 @@ class Annotator:
         self.im = im if isinstance(im, Image.Image) else Image.fromarray(im)
         self.draw = ImageDraw.Draw(self.im)
 
+    def _to_numpy(self):
+        """Move a tensor image to CPU only when a CPU drawing operation requires it."""
+        if isinstance(self.im, torch.Tensor):
+            self.im = self.im.cpu().numpy()
+
     def result(self, pil=False):
         """Return annotated image as array or PIL image."""
+        self._to_numpy()
         im = np.asarray(self.im)  # self.im is in BGR
         return Image.fromarray(im[..., ::-1]) if pil else im
 
     def show(self, title: str | None = None):
         """Show the annotated image."""
-        im = Image.fromarray(np.asarray(self.im)[..., ::-1])  # Convert BGR NumPy array to RGB PIL Image
+        im = Image.fromarray(self.result()[..., ::-1])  # Convert BGR NumPy array to RGB PIL Image
         if IS_COLAB or IS_KAGGLE:  # cannot use IS_JUPYTER as it runs for all IPython environments
             try:
                 display(im)  # noqa - display() function only available in ipython environments
@@ -534,7 +680,7 @@ class Annotator:
 
     def save(self, filename: str = "image.jpg"):
         """Save the annotated image to 'filename'."""
-        cv2.imwrite(filename, np.asarray(self.im))
+        cv2.imwrite(filename, self.result())
 
     @staticmethod
     def get_bbox_dimension(bbox: tuple | list):
@@ -608,8 +754,8 @@ def plot_labels(boxes, cls, names=(), save_dir=Path(""), on_plot=None):
     ax[3].hist2d(x["width"], x["height"], bins=50, cmap=subplot_3_4_color)
     ax[3].set_xlabel("width")
     ax[3].set_ylabel("height")
-    for a in {0, 1, 2, 3}:
-        for s in {"top", "right", "left", "bottom"}:
+    for a in (0, 1, 2, 3):
+        for s in ("top", "right", "left", "bottom"):
             ax[a].spines[s].set_visible(False)
 
     fname = save_dir / "labels.jpg"
@@ -654,7 +800,9 @@ def save_one_box(
         >>> im = cv2.imread("image.jpg")
         >>> cropped_im = save_one_box(xyxy, im, file="cropped.jpg", square=True)
     """
-    if not isinstance(xyxy, torch.Tensor):  # may be list
+    if isinstance(xyxy, np.ndarray):
+        xyxy = torch.from_numpy(xyxy)
+    elif not isinstance(xyxy, torch.Tensor):  # may be list
         xyxy = torch.stack(xyxy)
     b = ops.xyxy2xywh(xyxy.view(-1, 4))  # boxes
     if square:
@@ -668,15 +816,15 @@ def save_one_box(
         file.parent.mkdir(parents=True, exist_ok=True)  # make directory
         f = str(increment_path(file).with_suffix(".jpg"))
         # cv2.imwrite(f, crop)  # save BGR, https://github.com/ultralytics/yolov5/issues/7007 chroma subsampling issue
-        crop = crop.squeeze(-1) if grayscale else crop[..., ::-1] if BGR else crop
-        Image.fromarray(crop).save(f, quality=95, subsampling=0)  # save RGB
+        im_save = crop.squeeze(-1) if grayscale else crop[..., ::-1] if BGR else crop
+        Image.fromarray(im_save).save(f, quality=95, subsampling=0)  # save RGB
     return crop
 
 
 @threaded
 def plot_images(
     labels: dict[str, Any],
-    images: torch.Tensor | np.ndarray = np.zeros((0, 3, 640, 640), dtype=np.float32),
+    images: torch.Tensor | np.ndarray | None = None,
     paths: list[str] | None = None,
     fname: str = "images.jpg",
     names: dict[int, str] | None = None,
@@ -685,6 +833,8 @@ def plot_images(
     max_subplots: int = 16,
     save: bool = True,
     conf_thres: float = 0.25,
+    show_labels: bool = True,
+    show_conf: bool = True,
 ) -> np.ndarray | None:
     """Plot image grid with labels, bounding boxes, masks, and keypoints.
 
@@ -700,6 +850,8 @@ def plot_images(
         max_subplots (int): Maximum number of subplots in the image grid.
         save (bool): Whether to save the plotted image grid to a file.
         conf_thres (float): Confidence threshold for displaying detections.
+        show_labels (bool): Whether to display class labels.
+        show_conf (bool): Whether to display confidence values.
 
     Returns:
         (np.ndarray | None): Plotted image grid as a numpy array if save is False, None otherwise.
@@ -714,7 +866,8 @@ def plot_images(
         - 3 channels: Used as-is (standard RGB)
         - 4+ channels: Cropped to first 3 channels
     """
-    for k in {"cls", "bboxes", "conf", "masks", "keypoints", "batch_idx", "images"}:
+    images = np.zeros((0, 3, 640, 640), dtype=np.float32) if images is None else images
+    for k in ("cls", "bboxes", "conf", "masks", "keypoints", "batch_idx", "images", "semantic_mask", "depth"):
         if k not in labels:
             continue
         if k == "cls" and labels[k].ndim == 2:
@@ -728,6 +881,8 @@ def plot_images(
     confs = labels.get("conf", None)
     masks = labels.get("masks", np.zeros(0, dtype=np.uint8))
     kpts = labels.get("keypoints", np.zeros(0, dtype=np.float32))
+    semantic_masks = labels.get("semantic_mask", np.zeros(0, dtype=np.int64))
+    depth_maps = labels.get("depth", np.zeros(0, dtype=np.float32))
     images = labels.get("img", images)  # default to input images
 
     if len(images) and isinstance(images, torch.Tensor):
@@ -792,7 +947,9 @@ def plot_images(
                     color = colors(c)
                     c = names.get(c, c) if names else c
                     if labels or conf[j] > conf_thres:
-                        label = f"{c}" if labels else f"{c} {conf[j]:.1f}"
+                        conf_text = f"{conf[j]:.1f}" if conf is not None else ""
+                        label = f"{c}" if show_labels else ""
+                        label += f" {conf_text}".strip() if show_conf else ""
                         annotator.box_label(box, label, color=color)
 
             elif len(classes):
@@ -845,6 +1002,36 @@ def plot_images(
                         except Exception:
                             pass
                 annotator.fromarray(im)
+
+        # Plot semantic masks
+        if len(semantic_masks) and i < len(semantic_masks):
+            mask = semantic_masks[i]
+            mh, mw = mask.shape
+            if mh != h or mw != w:
+                mask = cv2.resize(mask.astype(np.uint8), (w, h), interpolation=cv2.INTER_NEAREST)
+            im = np.asarray(annotator.im).copy()
+            sub_annotator = Annotator(np.ascontiguousarray(im[y : y + h, x : x + w]), line_width=1, pil=False)
+            sub_annotator.semantic_mask(mask, alpha=0.4)
+            im[y : y + h, x : x + w] = sub_annotator.im
+            annotator.fromarray(im)
+
+        # Plot depth maps
+        if len(depth_maps) and i < len(depth_maps):
+            d = depth_maps[i]
+            if d.ndim == 3:
+                d = d.squeeze(0)
+            dh, dw = d.shape
+            if dh != h or dw != w:
+                d = cv2.resize(d.astype(np.float32), (w, h), interpolation=cv2.INTER_NEAREST)
+            im = np.asarray(annotator.im).copy()
+            # The mosaic deviates from the Annotator BGR-buffer convention (it holds RGB), so convert the patch
+            # to BGR for the overlay, then back to RGB for the mosaic.
+            sub_bgr = cv2.cvtColor(np.ascontiguousarray(im[y : y + h, x : x + w]), cv2.COLOR_RGB2BGR)
+            sub_annotator = Annotator(sub_bgr, line_width=1, pil=False)
+            sub_annotator.depth_map(d, alpha=0.6)
+            im[y : y + h, x : x + w] = cv2.cvtColor(sub_annotator.im, cv2.COLOR_BGR2RGB)
+            annotator.fromarray(im)
+
     if not save:
         return np.asarray(annotator.im)
     annotator.im.save(fname)  # save
@@ -854,9 +1041,9 @@ def plot_images(
 
 @plt_settings()
 def plot_results(file: str = "path/to/results.csv", dir: str = "", on_plot: Callable | None = None):
-    """Plot training results from a results CSV file. The function supports various types of data including
-    segmentation, pose estimation, and classification. Plots are saved as 'results.png' in the directory where the
-    CSV is located.
+    """Plot training results from a results CSV file. The function supports various types of data including instance
+    segmentation, semantic segmentation, pose estimation, and classification. Plots are saved as 'results.png' in
+    the directory where the CSV is located.
 
     Args:
         file (str, optional): Path to the CSV file containing the training results.
@@ -869,7 +1056,6 @@ def plot_results(file: str = "path/to/results.csv", dir: str = "", on_plot: Call
     """
     import matplotlib.pyplot as plt  # scope for faster 'import ultralytics'
     import polars as pl
-    from scipy.ndimage import gaussian_filter1d
 
     save_dir = Path(file).parent if file else Path(dir)
     files = list(save_dir.glob("results*.csv"))
@@ -896,7 +1082,7 @@ def plot_results(file: str = "path/to/results.csv", dir: str = "", on_plot: Call
             for i, j in enumerate(columns):
                 y = data.select(j).to_numpy().flatten().astype("float")
                 ax[i].plot(x, y, marker=".", label=f.stem, linewidth=2, markersize=8)  # actual results
-                ax[i].plot(x, gaussian_filter1d(y, sigma=3), ":", label="smooth", linewidth=2)  # smoothing line
+                ax[i].plot(x, _gaussian_filter1d(y, sigma=3), ":", label="smooth", linewidth=2)  # smoothing line
                 ax[i].set_title(j, fontsize=12)
         except Exception as e:
             LOGGER.error(f"Plotting error for {f}: {e}")
@@ -907,6 +1093,39 @@ def plot_results(file: str = "path/to/results.csv", dir: str = "", on_plot: Call
         plt.close()
         if on_plot:
             on_plot(fname)
+
+
+@plt_settings()
+def plot_multitrain_results(scores: dict, key: str = "fitness", save_dir=Path()):
+    """Plot per-dataset metrics from a multi-dataset training run as a bar chart with the cross-dataset mean.
+
+    Args:
+        scores (dict): Mapping of dataset name to its scalar metric value.
+        key (str): Name of the plotted metric, used as the y-axis label.
+        save_dir (str | Path): Directory to save the 'multitrain_results.png' figure.
+
+    Returns:
+        (Path): Path to the saved figure.
+
+    Examples:
+        >>> from ultralytics.utils.plotting import plot_multitrain_results
+        >>> plot_multitrain_results({"coco8": 0.61, "dota8": 0.48}, key="metrics/mAP50-95(B)")
+    """
+    import matplotlib.pyplot as plt  # scope for faster 'import ultralytics'
+
+    mean = sum(scores.values()) / len(scores)
+    fig, ax = plt.subplots(figsize=(max(6.0, len(scores) * 0.45), 5), tight_layout=True)
+    ax.bar(range(len(scores)), list(scores.values()), color="#042AFF")
+    ax.axhline(mean, color="orange", linestyle="--", label=f"mean = {mean:.3f}")
+    ax.set_xticks(range(len(scores)))
+    ax.set_xticklabels(list(scores), rotation=90)
+    ax.set_ylabel(key)
+    ax.set_title(f"MultiTrainer results across {len(scores)} datasets")
+    ax.legend()
+    fname = Path(save_dir) / "multitrain_results.png"
+    fig.savefig(fname, dpi=200)
+    plt.close(fig)
+    return fname
 
 
 def plt_color_scatter(v, f, bins: int = 20, cmap: str = "viridis", alpha: float = 0.8, edgecolors: str = "none"):
@@ -931,14 +1150,76 @@ def plt_color_scatter(v, f, bins: int = 20, cmap: str = "viridis", alpha: float 
     hist, xedges, yedges = np.histogram2d(v, f, bins=bins)
     colors = [
         hist[
-            min(np.digitize(v[i], xedges, right=True) - 1, hist.shape[0] - 1),
-            min(np.digitize(f[i], yedges, right=True) - 1, hist.shape[1] - 1),
+            np.clip(np.digitize(v[i], xedges, right=False) - 1, 0, hist.shape[0] - 1),
+            np.clip(np.digitize(f[i], yedges, right=False) - 1, 0, hist.shape[1] - 1),
         ]
         for i in range(len(v))
     ]
 
     # Scatter plot
     plt.scatter(v, f, c=colors, cmap=cmap, alpha=alpha, edgecolors=edgecolors)
+
+
+def plot_depth_panels(
+    imgs: torch.Tensor,
+    preds: list[torch.Tensor],
+    fname: str | Path,
+    gt: torch.Tensor | None = None,
+    titles: list[str] | None = None,
+    max_images: int = 4,
+) -> None:
+    """Write a depth panel grid: one row per image, columns RGB | GT (if provided) | one per entry of ``preds``.
+
+    All depth columns share the GT valid-pixel range per row, so a scale error between GT and any prediction shows up
+    directly as a color mismatch. Panels are resized to the RGB image size, so predictions at head stride need no prior
+    interpolation.
+
+    Args:
+        imgs (torch.Tensor): (B,3,H,W) float image tensor in [0,1].
+        preds (list): List of (B,1,H,W) or (B,H,W) predicted depth tensors; each adds one column.
+        fname (str | Path): Output image path.
+        gt (torch.Tensor, optional): (B,1,H,W) or (B,H,W) ground-truth depth in meters (pixels <= 0 invalid, drawn
+            black). Used for the GT column and to set the shared color scale.
+        titles (list, optional): List of column labels, drawn in a 24 px header strip. None keeps the strip-free layout.
+        max_images (int): Maximum number of rows.
+    """
+    preds = [p.unsqueeze(1) if p.ndim == 3 else p for p in preds]
+    h, w = imgs.shape[-2:]
+    rows = []
+    for i in range(min(imgs.shape[0], max_images)):
+        rgb = (imgs[i].detach().float().cpu().clamp(0, 1).numpy() * 255).astype(np.uint8).transpose(1, 2, 0)
+        panels = [cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)]
+
+        if gt is not None:
+            g = gt[i, 0] if gt.ndim == 4 else gt[i]
+            gv = g[g > 0]
+            vmin = float(gv.min()) if gv.numel() else 0.0
+            vmax = float(gv.max()) if gv.numel() else 1.0
+            d = g.detach().float().cpu().numpy() if isinstance(g, torch.Tensor) else np.asarray(g, np.float32)
+            panels.append(
+                cv2.resize(colorize_depth(d, vmin, vmax, mode="metric"), (w, h), interpolation=cv2.INTER_NEAREST)
+            )
+        else:
+            # No GT: scale each prediction by its own valid range.
+            vmin = vmax = None
+
+        for p in preds:
+            d = p[i, 0] if p.ndim == 4 else p[i]
+            d = d.detach().float().cpu().numpy() if isinstance(d, torch.Tensor) else np.asarray(d, np.float32)
+            lo, hi = vmin, vmax
+            if lo is None or hi is None:
+                dv = d[d > 0]
+                lo, hi = (float(dv.min()), float(dv.max())) if dv.size else (0.0, 1.0)
+            panels.append(cv2.resize(colorize_depth(d, lo, hi, mode="metric"), (w, h), interpolation=cv2.INTER_NEAREST))
+
+        rows.append(np.hstack(panels))
+    grid = np.vstack(rows)
+    if titles:
+        strip = np.full((24, grid.shape[1], 3), 255, dtype=np.uint8)
+        for j, t in enumerate(titles):
+            cv2.putText(strip, str(t), (j * w + 4, 17), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1, cv2.LINE_AA)
+        grid = np.vstack([strip, grid])
+    cv2.imwrite(str(fname), grid)
 
 
 @plt_settings()
@@ -955,7 +1236,6 @@ def plot_tune_results(results_file: str = "tune_results.ndjson", exclude_zero_fi
     import json
 
     import matplotlib.pyplot as plt  # scope for faster 'import ultralytics'
-    from scipy.ndimage import gaussian_filter1d
 
     def _save_one_file(file):
         """Save one matplotlib plot to 'file'."""
@@ -1015,7 +1295,7 @@ def plot_tune_results(results_file: str = "tune_results.ndjson", exclude_zero_fi
         if exclude_zero_fitness_points and not isinstance(zero_mask, slice):
             y = y[zero_mask]
         plt.plot(x, y, "o", markersize=5, alpha=0.8, label=dataset)
-    plt.plot(x, gaussian_filter1d(all_fitness, sigma=3), ":", color="0.35", label="smoothed mean", linewidth=2)
+    plt.plot(x, _gaussian_filter1d(all_fitness, sigma=3), ":", color="0.35", label="smoothed mean", linewidth=2)
     plt.title("Fitness vs Iteration")
     plt.xlabel("Iteration")
     plt.ylabel("Fitness")
@@ -1037,7 +1317,7 @@ def feature_visualization(x, module_type: str, stage: int, n: int = 32, save_dir
     """
     import matplotlib.pyplot as plt  # scope for faster 'import ultralytics'
 
-    for m in {"Detect", "Segment", "Pose", "Classify", "OBB", "RTDETRDecoder"}:  # all model heads
+    for m in ("Detect", "Segment", "Pose", "Classify", "OBB", "RTDETRDecoder"):  # all model heads
         if m in module_type:
             return
     if isinstance(x, torch.Tensor):
@@ -1047,7 +1327,7 @@ def feature_visualization(x, module_type: str, stage: int, n: int = 32, save_dir
 
             blocks = torch.chunk(x[0].cpu(), channels, dim=0)  # select batch index 0, block by channels
             n = min(n, channels)  # number of plots
-            _, ax = plt.subplots(math.ceil(n / 8), 8, tight_layout=True)  # 8 rows x n/8 cols
+            _, ax = plt.subplots(math.ceil(n / 8), 8, tight_layout=True)  # n/8 rows x 8 cols
             ax = ax.ravel()
             plt.subplots_adjust(wspace=0.05, hspace=0.05)
             for i in range(n):

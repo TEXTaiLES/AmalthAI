@@ -20,11 +20,11 @@ parser.add_argument('--scale', type=str, default='false', choices=['true', 'fals
 args = parser.parse_args()
 
 # Load a model
-model = YOLO("/yolo/ultralytics/ultralytics/cfg/models/v8/yolov8.yaml").load("yolov8n.pt")  # build from YAML and transfer weights
+model = YOLO("yolov8n.pt")  # build from YAML and transfer weights
 
 current_time_micro = datetime.datetime.now().microsecond
 
-# Augmentations (YOLO Defaults)
+# Augmentations
 rotate_value = 30 if args.rotate == "true" else 0
 flip_value = 0.5 if args.flip == "true" else 0
 scale_value = 0.5 if args.scale == "true" else 0
