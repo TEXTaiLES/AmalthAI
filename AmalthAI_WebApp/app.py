@@ -1430,7 +1430,7 @@ def inference():
                 try:
                     # Run inference
                     container.exec_run([
-                        "python", "/data/ObjectDetection/ultralytics/inference_v1.py",
+                        "python", "/data/ObjectDetection/ultralytics/inference_script.py",
                         "--checkpoint", checkpoint_path,
                         "--input", f"/data/{user_slug}/inference/detection/inputs/{model_id}/{timestamp}/",
                         "--output", f"/data/{user_slug}/inference/detection/outputs/{model_id}/{timestamp}/",

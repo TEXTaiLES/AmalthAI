@@ -1,3 +1,5 @@
 id,name,url,description
-YOLOv11,YOLOv11,https://docs.ultralytics.com/models/yolo11/,Latest YOLO version with improved accuracy and speed. Recommended for state-of-the-art real-time detection performance.
-YOLOv8,YOLOv8,https://docs.ultralytics.com/models/yolov8/,Proven and stable version with excellent real-time performance. Good choice for production systems with proven reliability.
+YOLO26,YOLO26,https://docs.ultralytics.com/models/yolo26,Latest YOLO model offering improved accuracy and speed. A good choice when you want strong overall detection performance with fast inference.
+YOLO11,YOLO11,https://docs.ultralytics.com/models/yolo11/,Fast and accurate object detection model that provides a good balance between performance and computational cost. Suitable for most real-time detection tasks.
+YOLOv8,YOLOv8,https://docs.ultralytics.com/models/yolov8/,Well-established and reliable YOLO model with strong detection performance and fast inference. A good choice for stable and widely tested applications.
+RT-DETR,RT-DETR,https://docs.ultralytics.com/models/rtdetr,Transformer-based object detection model that provides strong accuracy and competitive inference speed. A good alternative to YOLO models when detection accuracy is a priority.

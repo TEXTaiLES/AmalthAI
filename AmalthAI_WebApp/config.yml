@@ -5,7 +5,7 @@ paths:
 images:
   segmentation: segm_cls_image:latest
   classification: segm_cls_image:latest
-  detection: ultralytics/ultralytics:latest
+  detection: ultralytics/ultralytics:8.4.112
 
 kubeflow:
   namespace: kubeflow

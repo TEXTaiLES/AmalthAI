@@ -129,7 +129,7 @@ def get_timestamp_path():
 timestamp_path = get_timestamp_path()
 
 # Conduct experiments based on model selection
-models_list = ("yolov8", "yolov11")
+models_list = ("yolov8", "yolo11","yolo26","rtdetr")
 
 if model_selection == "allmodels":
     all_success = True  # flag

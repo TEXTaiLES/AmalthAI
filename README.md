@@ -125,7 +125,7 @@ The Platform's backend dynamically creates containers on demand for each segment
 To build this image locally, you can perform the following steps:
 
 ```bash
-docker pull ultralytics/ultralytics:latest
+docker pull ultralytics/ultralytics:8.4.112
 ```
 
 <p align="center">
