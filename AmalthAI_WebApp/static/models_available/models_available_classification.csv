@@ -1,5 +1,7 @@
 id,name,url,description
-ResNet18,ResNet18,https://arxiv.org/abs/1512.03385,A deep residual network that's accurate and versatile. Best for high-accuracy classification when computational power is available.
-EfficientNetB0,EfficientNetB0,https://arxiv.org/abs/1905.11946,A highly efficient model that balances accuracy and speed. Ideal for resource-constrained environments and mobile deployment.
-MobileNetV2,MobileNetV2,https://arxiv.org/abs/1801.04381,Lightweight model optimized for mobile and edge devices. Great for real-time classification with minimal memory footprint.
-ShuffleNetV2,ShuffleNetV2,https://arxiv.org/abs/1807.11164,Ultra-efficient model designed for mobile platforms. Fastest option when latency is critical.
+ResNet18,ResNet18,https://arxiv.org/abs/1512.03385,A lightweight and reliable classification model that offers a good balance between accuracy and computational cost. A strong general-purpose choice for most datasets.
+ResNet50,ResNet50,https://arxiv.org/abs/1512.03385,A deeper and more powerful version of ResNet that can achieve higher accuracy than ResNet18. Best suited for larger datasets and when accuracy is more important than inference speed.
+ConvNeXt,ConvNeXt,https://arxiv.org/abs/2201.03545,A modern convolutional network designed to achieve strong classification performance while maintaining the efficiency of CNNs. A good choice when higher accuracy is preferred over lightweight inference.
+EfficientNetB0,EfficientNetB0,https://arxiv.org/abs/1905.11946,A highly efficient model that provides a strong balance between accuracy and computational cost. A good choice when both performance and efficiency are important.
+MobileNetV2,MobileNetV2,https://arxiv.org/abs/1801.04381,A lightweight model optimized for mobile and edge devices. Recommended for fast inference and applications with limited computational resources.
+ShuffleNetV2,ShuffleNetV2,https://arxiv.org/abs/1807.11164,An extremely lightweight model designed for fast inference on resource-constrained devices. A good choice when low latency and minimal computational cost are the main priorities.

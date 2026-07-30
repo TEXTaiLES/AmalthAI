@@ -143,7 +143,7 @@ def get_timestamp_path():
 timestamp_path = get_timestamp_path()
 
 # Conduct experiments based on model selection
-models_list = ("ResNet18", "EfficientNetB0","MobileNetV2","ShuffleNetV2")
+models_list = ("ResNet18", "ResNet50", "ConvNeXt", "EfficientNetB0","MobileNetV2","ShuffleNetV2")
 
 if model_selection == "allmodels":
     all_success = True  # flag

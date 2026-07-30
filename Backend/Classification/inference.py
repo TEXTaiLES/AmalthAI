@@ -43,6 +43,10 @@ def get_target_layer(model, model_name):
         return model.features[-1]
     elif "shufflenet" in model_name:
         return model.conv5
+    elif "resnet50" in model_name:
+        return model.layer4[-1]
+    elif "convnext" in model_name:
+        return model.features[-1]
     else:
         raise ValueError(f"Unsupported model: {model_name}")
 
