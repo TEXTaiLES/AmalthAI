@@ -1,8 +1,15 @@
 import yaml
+from pathlib import Path
 
 def load_config(path):
-    with open(path, "r") as f:
-        return yaml.safe_load(f)
+    config = {}
+
+    for file in [path, "config.override.yml"]:
+        if Path(file).exists():
+            with open(file, "r") as f:
+                config.update(yaml.safe_load(f))
+
+    return config
 
 def chown_target(config):
     permissions = config.get("permissions", {})
