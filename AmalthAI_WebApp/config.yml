@@ -7,6 +7,9 @@ images:
   classification: segm_cls_image:latest
   detection: ultralytics/ultralytics:8.4.112
 
+flask:
+  secret_key: "your-secret-key" # replace with a secure key
+
 kubeflow:
   namespace: kubeflow
 

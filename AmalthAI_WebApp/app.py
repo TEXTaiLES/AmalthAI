@@ -13,7 +13,6 @@ import threading
 import json
 import uuid
 import docker
-import zipfile
 import requests
 from urllib.parse import quote
 from datetime import datetime
@@ -22,12 +21,15 @@ from utils.models_page import write_results
 from utils.helpers import load_datasets, load_models_available, load_dataset_info, get_max_image_size, load_models, get_best_timestamp
 from utils.load_config import load_config, chown_target
 from utils import hestia_client as hc
+from utils.zip_utils import safe_extract_zip
 
+# Yaml config
+config = load_config("config.yml")
 
 client = docker.from_env()
 
 app = Flask(__name__)
-app.secret_key = 'supersecret'
+app.config["SECRET_KEY"] = config["flask"]["secret_key"]
 app.config.from_file('config.toml', load=tomllib.load, text=False)
 
 @app.route("/login", methods=["GET", "POST"])
@@ -49,10 +51,6 @@ def logout():
     return response
 
 # App configurations
-
-# Yaml config
-config = load_config("config.yml")
-
 DIRECTUS_BASE_URL = config.get("directus", {}).get("base_url")
 DIRECTUS_LOGIN_URL = config.get("directus", {}).get("login_url")
 SHARED_REFRESH_COOKIE_NAME = config.get("textailes-token", {}).get("token")
@@ -62,8 +60,7 @@ BASE_HOST_PATH_OUT      = config.get("paths").get("base_host_path_out")
 IMAGE_SEGM_CLS  = config.get("images").get("classification")
 IMAGE_OD        = config.get("images").get("detection")
 
-# HESTIA data-lake integration: feature flag + client base-url fallback from config.
-# (HESTIA_BASE_URL / HESTIA_API_KEY env, set by docker-compose, take precedence.)
+# HESTIA data-lake integration
 HESTIA_ENABLED = bool(config.get("hestia", {}).get("enabled"))
 hc.configure(base_url=config.get("hestia", {}).get("base_url"))
 
@@ -378,12 +375,12 @@ def dataset():
     # Page Logic
     name       = request.args.get('id')
     mode       = request.args.get("mode", default="segmentation", type=str)
-    page       = request.args.get("page", default=1, type=int)
-    pager_size = request.args.get(
-        "pager_size",
-        default=config.get("defaults").get("pager_size"),
-        type=int
-    )
+    page       = request.args.get("page", default=1, type=int) or 1
+    pager_size = request.args.get("pager_size", default=config.get("defaults").get("pager_size"), type=int)
+    page       = max(page, 1)
+
+    if not pager_size or pager_size < 1:
+        pager_size = config.get("defaults").get("pager_size")
 
     if not name:
         return "Dataset not found", 404
@@ -396,6 +393,9 @@ def dataset():
         "detection"     : f"{user_datasets_root}/Object-Detection/",
         "classification": f"{user_datasets_root}/Classification/"
     }
+
+    if mode not in dataset_path:
+        return "Invalid mode", 400
 
     # HESTIA: rehydrate the dataset into the local cache so a dataset that lives
     # only in the data lake (not cached on this node) can still be viewed.
@@ -420,8 +420,9 @@ def dataset():
             item["display_name"] = os.path.basename(image_path)
 
     pager_size_options = [15, 30, 50, 80, 120]
+
     # Don't overload the page
-    visible_items = dataset_items[pager_size*(page-1):pager_size*page-1]
+    visible_items = dataset_items[pager_size*(page-1):pager_size*page]
     num_pages = math.ceil(len(dataset_items) / pager_size)
 
     return render_template(
@@ -582,8 +583,7 @@ def process_dataset(mode, zip_path, num_classes=None, user_slug=None):
     os.makedirs(tmp_dir)
 
     try:
-        with zipfile.ZipFile(zip_path, 'r') as z:
-            z.extractall(tmp_dir)
+        safe_extract_zip(zip_path, tmp_dir)
     except Exception as e:
         return False, f"Failed to unzip: {e}"
 
@@ -610,7 +610,7 @@ def process_dataset(mode, zip_path, num_classes=None, user_slug=None):
         ]
         for r in req:
             if not os.path.exists(os.path.join(tmp_dir, r)):
-                shutil.rmtree(os.path.dirname(tmp_dir), ignore_errors=True)
+                shutil.rmtree(tmp_dir, ignore_errors=True)
                 return False, f"Missing: {r}"
         
         # Check that images/train and masks/train match
@@ -635,7 +635,7 @@ def process_dataset(mode, zip_path, num_classes=None, user_slug=None):
 
     elif mode == "detection":
         if not os.path.isfile(os.path.join(tmp_dir, "data.yaml")):
-            shutil.rmtree(os.path.dirname(tmp_dir), ignore_errors=True)
+            shutil.rmtree(tmp_dir, ignore_errors=True)
             return False, "Missing data.yaml"
         
         # Check OD train split
@@ -702,16 +702,16 @@ def process_dataset(mode, zip_path, num_classes=None, user_slug=None):
         if dataset_already_split:
             ok, train_classes = validate_class_dir(train_dir, "train")
             if not ok:
-                shutil.rmtree(os.path.dirname(tmp_dir), ignore_errors=True)
+                shutil.rmtree(tmp_dir, ignore_errors=True)
                 return False, train_classes
 
             ok, val_classes = validate_class_dir(val_dir, "val")
             if not ok:
-                shutil.rmtree(os.path.dirname(tmp_dir), ignore_errors=True)
+                shutil.rmtree(tmp_dir, ignore_errors=True)
                 return False, val_classes
 
             if train_classes != val_classes:
-                shutil.rmtree(os.path.dirname(tmp_dir), ignore_errors=True)
+                shutil.rmtree(tmp_dir, ignore_errors=True)
                 missing_train = val_classes - train_classes
                 missing_val = train_classes - val_classes
                 return False, (
@@ -724,7 +724,7 @@ def process_dataset(mode, zip_path, num_classes=None, user_slug=None):
                 if os.path.isdir(os.path.join(tmp_dir, d))
             ]
             if len(subdirs) != int(num_classes):
-                shutil.rmtree(os.path.dirname(tmp_dir), ignore_errors=True)
+                shutil.rmtree(tmp_dir, ignore_errors=True)
                 return False, f"Expected {num_classes} class folders, found {len(subdirs)}"
     
             for cls in subdirs:
@@ -733,13 +733,13 @@ def process_dataset(mode, zip_path, num_classes=None, user_slug=None):
 
                 # Must NOT be empty
                 if len(contents) == 0:
-                    shutil.rmtree(os.path.dirname(tmp_dir), ignore_errors=True)
+                    shutil.rmtree(tmp_dir, ignore_errors=True)
                     return False, f"Class '{cls}' is empty"
 
                 # Must NOT contain directories
                 for item in contents:
                     if os.path.isdir(os.path.join(cls_path, item)):
-                        shutil.rmtree(os.path.dirname(tmp_dir), ignore_errors=True)
+                        shutil.rmtree(tmp_dir, ignore_errors=True)
                         return False, f"Class '{cls}' contains a folder ('{item}') but only image files are allowed"
 
     else:
@@ -754,9 +754,6 @@ def process_dataset(mode, zip_path, num_classes=None, user_slug=None):
         shutil.rmtree(final_path)
 
     shutil.move(tmp_dir, final_path)
-
-    # Clean the temp folder and zip
-    shutil.rmtree(os.path.dirname(tmp_dir), ignore_errors=True)
     os.remove(zip_path)
 
     return True, "Dataset imported successfully", final_path
@@ -1218,8 +1215,12 @@ def _persist_inference_to_hestia(user_slug, mode, model_id, model_name, dataset_
 @app.route('/inference', methods=['GET', 'POST'])
 @login_required
 def inference():
-    raw_id    = request.args.get("id")
-    mode     = request.args.get("mode")
+    raw_id = request.args.get("id")
+
+    mode = request.args.get("mode", default="segmentation", type=str)
+    if mode not in ("segmentation", "detection", "classification"):
+        return "Invalid mode", 400
+
     user_slug = get_current_user_slug()
     ensure_user_folders(user_slug)
 
@@ -1499,7 +1500,7 @@ def inference():
                                          "_hestia_cache", str(model_id))
                 checkpoint_path, config_path = hc.ensure_model_local(hestia_model, cache_dir)
 
-            files = request.files.getlist('file')  # Get multiple files
+            files = [f for f in request.files.getlist('file') if f.filename]  # Get multiple files
             if files:
                 timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
                 save_dir = os.path.join(inference_root, "inputs", str(model_id), timestamp)
