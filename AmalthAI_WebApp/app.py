@@ -178,9 +178,12 @@ def _mark_stale_if_dead(user_slug, job_id, status):
 
 
 def _write_job_status(user_slug, job_id, data):
-    os.makedirs(os.path.dirname(_job_status_path(user_slug, job_id)), exist_ok=True)
-    with open(_job_status_path(user_slug, job_id), "w", encoding="utf-8") as handle:
+    path = _job_status_path(user_slug, job_id)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp_path = f"{path}.tmp-{os.getpid()}-{threading.get_ident()}"
+    with open(tmp_path, "w", encoding="utf-8") as handle:
         json.dump(data, handle)
+    os.replace(tmp_path, path)
 
 
 def _read_job_status(user_slug, job_id):
