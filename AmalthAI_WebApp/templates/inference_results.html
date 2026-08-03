@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+{% block title %}Inference Results - {{ model.name }}{% endblock %}
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="container my-5">
+        <div class="row">
+            <div class="col-sm-4 col-12">
+                <div class="p-4 rounded shadow-sm bg-secondary-subtle">
+                    <h3 class="text-center mb-4">Model Information</h3>
+                    <table class="table table-borderless rounded">
+                        <tbody>
+                            <tr>
+                                <th class="form-label text-capitalize" style="width: 30%">Model name</th>
+                                <td>{{ model.name }}</td>
+                            </tr>
+                            <tr>
+                                <th class="form-label text-capitalize" style="width: 30%">Trained on</th>
+                                <td>{{ model.trained_on }}</td>
+                            </tr>
+                            <tr>
+                                <th class="form-label text-capitalize" style="width: 30%">Score</th>
+                                <td><span class="badge bg-success bg-opacity-75">{{ model.score }} {{ metric_label }}</span></td>
+                            </tr>
+                            <tr>
+                                <th class="form-label text-capitalize" style="width: 30%">Creation date</th>
+                                <td>{{ model.date }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <hr>
+                    <div class="d-grid gap-2">
+                        <a href="{{ url_for('inference', id=model_id, mode=mode) }}" class="btn btn-outline-secondary">Back to Inference</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-sm-8 col-12">
+                {% if color_table %}
+                <div class="mb-4 mt-sm-0 mt-4">
+                    <h5 class="mb-3">Mask Legend</h5>
+                    <div class="d-flex flex-wrap gap-2">
+                        {% for entry in color_table %}
+                        <div class="d-inline-flex align-items-center rounded-pill px-3 py-1 border bg-light bg-opacity-50" style="font-size: 0.85rem;">
+                            <span class="rounded-circle me-2 border" style="width: 14px; height: 14px; display: inline-block; background: {{ entry.hex }};"></span>
+                            <span class="text-capitalize text-muted">{{ entry.label }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if has_inference_results %}
+                    {% for run in results_runs %}
+                    <div class="table-responsive mb-4 mt-sm-0 mt-4">
+                        <h5 class="mb-2">Inference Results</h5>
+                        <div class="small text-muted mb-2">Run {{ run.timestamp }}</div>
+                        <table class="table table-striped">
+                            {% if mode == 'classification' %}
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Image</th>
+                                    <th>Grad-CAM</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for result in run.results %}
+                                <tr>
+                                    <td>{{ result.get('filename', result.get('name', 'file')) }}</td>
+                                    <td>
+                                        <div class="d-flex flex-column align-items-center gap-2">
+                                            <img src="{{ result.get('input_file') }}" alt="{{ result.get('filename', 'image') }}" class="img-thumbnail" style="max-height:200px;">
+                                            <a href="{{ result.get('input_file') }}" download class="btn btn-outline-primary btn-sm">Download Image</a>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        {% if result.get('gradcam_file') %}
+                                        <div class="d-flex flex-column align-items-center gap-2">
+                                            <img src="{{ result.get('gradcam_file') }}" alt="Grad-CAM" class="img-thumbnail" style="max-height:200px;">
+                                            <a href="{{ result.get('gradcam_file') }}" download class="btn btn-outline-primary btn-sm">Download Grad-CAM</a>
+                                        </div>
+                                        {% else %}
+                                        N/A
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% if result.get('output_text') %}
+                                <tr>
+                                    <td colspan="3" class="text-center">
+                                        <div class="d-inline-block text-start p-3 rounded-4 border" style="min-width:300px; background:#fafafa;">
+                                            {% set lines = result.output_text.split('\n') %}
+                                            {% for line in lines %}
+                                                {% if 'Predicted Class' in line %}
+                                                    {% set pred_parts = line.split('|') %}
+                                                    <div class="d-flex justify-content-between align-items-baseline mb-3">
+                                                        <span class="fs-5" style="font-weight:600; letter-spacing:-0.2px;">{{ pred_parts[0].replace('Predicted Class:', '').strip() }}</span>
+                                                        {% if pred_parts|length > 1 %}
+                                                        <span class="badge rounded-pill bg-success bg-opacity-10 text-success" style="font-size:0.75rem;">{{ pred_parts[1].replace('Confidence:', '').strip() }}</span>
+                                                        {% endif %}
+                                                    </div>
+                                                {% elif '===' in line %}
+                                                {% elif 'All Class Probabilities' in line %}
+                                                    <div class="text-uppercase mb-2" style="font-size:0.7rem; letter-spacing:0.06em; color:#9a9a9a;">Probabilities</div>
+                                                {% elif line.strip() %}
+                                                    {% set parts = line.split(':') %}
+                                                    {% if parts|length > 1 %}
+                                                    {% set pct = parts[1].split('(')[1].split('%')[0]|float if '(' in parts[1] else 0 %}
+                                                    <div class="mb-2">
+                                                        <div class="d-flex justify-content-between mb-1" style="font-size:0.8rem;">
+                                                            <span style="color:#555;">{{ parts[0] }}</span>
+                                                            <span style="color:#8a8a8a;">{{ '%.1f'|format(pct) }}%</span>
+                                                        </div>
+                                                        <div class="rounded-pill" style="height:4px; background:#eee; overflow:hidden;">
+                                                            <div class="rounded-pill" style="height:100%; width:{{ pct }}%; background:#9c9c9c;"></div>
+                                                        </div>
+                                                    </div>
+                                                    {% endif %}
+                                                {% endif %}
+                                            {% endfor %}
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endif %}
+                                {% endfor %}
+                            </tbody>
+                            {% else %}
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Image</th>
+                                    <th>Mask</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for result in run.results %}
+                                <tr>
+                                    <td>{{ result.get('input_image').split('/')[-1] }}</td>
+                                    <td>
+                                        <div class="d-flex flex-column align-items-center gap-2">
+                                            <img src="{{ result.get('input_image') }}" alt="image" class="img-thumbnail" style="max-height: 200px;">
+                                            <a href="{{ result.get('input_image') }}" download class="btn btn-outline-primary btn-sm">Download Image</a>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="d-flex flex-column align-items-center gap-2">
+                                            <img src="{{ result.get('output_image') }}" alt="mask" class="img-thumbnail" style="max-height: 200px;">
+                                            <a href="{{ result.get('output_image') }}" download class="btn btn-outline-primary btn-sm">Download Output</a>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            {% endif %}
+                        </table>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                <div class="alert alert-danger bg-danger-subtle border-0 mt-sm-0 mt-4" role="alert">
+                    Inference Results Not Available
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

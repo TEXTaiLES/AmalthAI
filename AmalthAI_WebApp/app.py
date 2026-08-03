@@ -1215,6 +1215,252 @@ def _persist_inference_to_hestia(user_slug, mode, model_id, model_name, dataset_
                                color_table=color_table or None)
 
 
+def _list_image_files(folder):
+    patterns = ("*.png", "*.jpg", "*.jpeg", "*.bmp", "*.webp")
+    files = []
+    for pattern in patterns:
+        files.extend(glob.glob(os.path.join(folder, pattern)))
+    return sorted(files)
+
+
+def _load_segmentation_color_table(user_slug, dataset_name):
+    if not dataset_name:
+        return []
+
+    dataset_file = os.path.join(
+        user_root(user_slug), "Datasets", "Segmentation", dataset_name, "labelmap.txt"
+    )
+    if not os.path.exists(dataset_file):
+        return []
+
+    color_table = []
+    with open(dataset_file, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+
+            # Format: label:color_rgb:parts:actions
+            parts = line.split(":")
+            if len(parts) < 2:
+                continue
+
+            label = parts[0]
+            rgb = parts[1]
+            try:
+                r, g, b = map(int, rgb.split(","))
+            except ValueError:
+                continue
+
+            color_table.append({
+                "label": label,
+                "rgb": f"rgb({r},{g},{b})",
+                "hex": "#{:02x}{:02x}{:02x}".format(r, g, b)
+            })
+
+    return color_table
+
+
+def _collect_inference_runs(user_slug, mode, model_id):
+    inference_root = os.path.join(user_root(user_slug), "inference", mode)
+    inputs_root = os.path.join(inference_root, "inputs", str(model_id))
+    outputs_root = os.path.join(inference_root, "outputs", str(model_id))
+
+    if not os.path.isdir(inputs_root):
+        return []
+
+    runs = []
+    for timestamp in sorted(os.listdir(inputs_root), reverse=True):
+        input_dir = os.path.join(inputs_root, timestamp)
+        output_dir = os.path.join(outputs_root, timestamp)
+        if not os.path.isdir(input_dir):
+            continue
+
+        run_results = []
+        input_files = _list_image_files(input_dir)
+
+        if mode == "classification":
+            for input_path in input_files:
+                filename = os.path.basename(input_path)
+                base_name = os.path.splitext(filename)[0]
+
+                output_file_path = os.path.join(output_dir, f"{base_name}.txt")
+                if not os.path.exists(output_file_path):
+                    continue
+
+                output_text = None
+                with open(output_file_path, "r", encoding="utf-8") as f:
+                    output_text = f.read()
+
+                gradcam_filename = f"{base_name}_gradcam.jpg"
+                gradcam_path = os.path.join(output_dir, gradcam_filename)
+                gradcam_file = None
+                if os.path.exists(gradcam_path):
+                    gradcam_file = url_for(
+                        "user_inference_files",
+                        filename=f"classification/outputs/{model_id}/{timestamp}/{gradcam_filename}"
+                    )
+
+                run_results.append({
+                    "input_file": url_for(
+                        "user_inference_files",
+                        filename=f"classification/inputs/{model_id}/{timestamp}/{filename}"
+                    ),
+                    "output_text": output_text,
+                    "gradcam_file": gradcam_file,
+                    "filename": filename,
+                })
+
+        elif mode == "detection":
+            predict_dir = os.path.join(output_dir, "predict")
+            output_map = {}
+            for output_path in _list_image_files(predict_dir):
+                base = os.path.splitext(os.path.basename(output_path))[0]
+                output_map[base] = os.path.basename(output_path)
+
+            for input_path in input_files:
+                filename = os.path.basename(input_path)
+                base_name = os.path.splitext(filename)[0]
+                output_filename = output_map.get(base_name)
+                if not output_filename:
+                    continue
+
+                run_results.append({
+                    "input_image": url_for(
+                        "user_inference_files",
+                        filename=f"detection/inputs/{model_id}/{timestamp}/{filename}"
+                    ),
+                    "output_image": url_for(
+                        "user_inference_files",
+                        filename=f"detection/outputs/{model_id}/{timestamp}/predict/{output_filename}"
+                    ),
+                })
+
+        else:  # segmentation
+            output_files = [os.path.basename(path) for path in _list_image_files(output_dir)]
+            output_by_base = {os.path.splitext(name)[0]: name for name in output_files}
+
+            for input_path in input_files:
+                filename = os.path.basename(input_path)
+                base_name = os.path.splitext(filename)[0]
+
+                # Exact match first (safe, unambiguous).
+                matched_output = output_by_base.get(base_name)
+
+                # Fallback: substring match, only if no exact match was found.
+                if not matched_output:
+                    matched_output = next(
+                        (name for name in output_files
+                         if base_name in os.path.splitext(name)[0]
+                         or os.path.splitext(name)[0] in base_name),
+                        None
+                    )
+
+                if not matched_output:
+                    continue
+
+                run_results.append({
+                    "input_image": url_for(
+                        "user_inference_files",
+                        filename=f"segmentation/inputs/{model_id}/{timestamp}/{filename}"
+                    ),
+                    "output_image": url_for(
+                        "user_inference_files",
+                        filename=f"segmentation/outputs/{model_id}/{timestamp}/{matched_output}"
+                    ),
+                })
+
+        # Hide broken/incomplete runs that produced no output at all.
+        if run_results:
+            runs.append({"timestamp": timestamp, "results": run_results})
+
+    return runs
+
+
+def _resolve_inference_model(mode_params, raw_id):
+    model = None
+    hestia_model = None
+    model_id = raw_id
+
+    if HESTIA_ENABLED:
+        hestia_model = hc.get_model(raw_id)
+        if hestia_model:
+            model = {
+                "name": hestia_model.get("name"),
+                "trained_on": hestia_model.get("trained_on"),
+                "score": hestia_model.get("score"),
+                "date": hestia_model.get("trained_date"),
+                "model_id": hestia_model.get("model_id"),
+            }
+            model_id = hestia_model.get("model_id")
+
+    if model is None:
+        try:
+            model_id = int(raw_id)
+        except (TypeError, ValueError):
+            return None, None, None
+
+        with open(mode_params["csv"], newline="", encoding="utf-8") as csvfile:
+            reader = csv.DictReader(csvfile)
+            models = [row for row in reader]
+        model = next((m for i, m in enumerate(models, 1) if i == model_id), None)
+        if not model:
+            return None, None, None
+
+    return model, hestia_model, model_id
+
+
+@app.route('/inference/results', methods=['GET'])
+@login_required
+def inference_results():
+    raw_id = request.args.get("id")
+    mode = request.args.get("mode")
+    user_slug = get_current_user_slug()
+    ensure_user_folders(user_slug)
+
+    params = {
+        "segmentation": {
+            "csv": os.path.join(user_root(user_slug), "models_db", "trained_models_db_segm.csv"),
+            "metric": "mIoU Score"
+        },
+        "detection": {
+            "csv": os.path.join(user_root(user_slug), "models_db", "trained_models_db_od.csv"),
+            "metric": "mAP 50-95 Score"
+        },
+        "classification": {
+            "csv": os.path.join(user_root(user_slug), "models_db", "trained_models_db_cls.csv"),
+            "metric": "Accuracy"
+        },
+    }
+
+    if mode not in params:
+        return "Invalid mode", 400
+
+    mode_params = params[mode]
+    metric = mode_params["metric"]
+
+    model, _, model_id = _resolve_inference_model(mode_params, raw_id)
+    if not model:
+        return "Model not found", 404
+
+    dataset_name = model.get("trained_on")
+    color_table = _load_segmentation_color_table(user_slug, dataset_name) if mode == "segmentation" else []
+
+    results_runs = _collect_inference_runs(user_slug, mode, model_id)
+    has_inference_results = bool(results_runs)
+
+    return render_template(
+        'inference_results.html',
+        mode=mode,
+        model_id=model_id,
+        model=model,
+        metric_label=metric,
+        color_table=color_table,
+        has_inference_results=has_inference_results,
+        results_runs=results_runs,
+    )
+
+
 @app.route('/inference', methods=['GET', 'POST'])
 @login_required
 def inference():
@@ -1242,34 +1488,9 @@ def inference():
     mode_params = params[mode]
     metric      = mode_params["metric"]
 
-    # Resolve the model: segmentation is HESTIA-backed (addressed by UUID);
-    # other modes use the 1-based CSV row index. CSV is also the fallback.
-    model = None
-    hestia_model = None
-    model_id = raw_id
-    if HESTIA_ENABLED:
-        hestia_model = hc.get_model(raw_id)
-        if hestia_model:
-            model = {
-                "name"      : hestia_model.get("name"),
-                "trained_on": hestia_model.get("trained_on"),
-                "score"     : hestia_model.get("score"),
-                "date"      : hestia_model.get("trained_date"),
-                "model_id"  : hestia_model.get("model_id"),
-            }
-            model_id = hestia_model.get("model_id")
-
-    if model is None:
-        try:
-            model_id = int(raw_id)
-        except (TypeError, ValueError):
-            return "Model not found", 404
-        with open(mode_params["csv"], newline='', encoding='utf-8') as csvfile:
-            reader = csv.DictReader(csvfile)
-            models = [row for row in reader]
-        model = next((m for i, m in enumerate(models, 1) if i == model_id), None)
-        if not model:
-            return "Model not found", 404
+    model, hestia_model, model_id = _resolve_inference_model(mode_params, raw_id)
+    if not model:
+        return "Model not found", 404
 
     error_msg   = None
     success_msg = None
@@ -1361,30 +1582,10 @@ def inference():
                             'output_image': output_image
                         })
             
-            # Load datasets coloring to propagate it to the inference page
-            if dataset_name:
-                dataset_file = os.path.join(user_root(user_slug), "Datasets", "Segmentation", dataset_name, "labelmap.txt")
+            # Load dataset color map to keep segmentation legend available.
+            color_table = _load_segmentation_color_table(user_slug, dataset_name)
 
-                if os.path.exists(dataset_file):
-                    with open(dataset_file, "r", encoding="utf-8") as f:
-                        for line in f:
-                            line = line.strip()
-                            if not line or line.startswith("#"):
-                                continue
-
-                            # Format: label:color_rgb:parts:actions
-                            parts = line.split(":")
-                            if len(parts) >= 2:
-                                label = parts[0]
-                                rgb   = parts[1]
-                                r, g, b = map(int, rgb.split(","))
-
-                                color_table.append({
-                                    "label": label,
-                                    "rgb": f"rgb({r},{g},{b})",
-                                    "hex": "#{:02x}{:02x}{:02x}".format(r, g, b)
-                                })
-                
+            if files:
                 success_msg = f"Inference for {len(files)} image(s) completed!"
 
             # HESTIA: persist inference inputs + outputs (non-fatal).
@@ -1591,6 +1792,8 @@ def inference():
         flash(success_msg, "info")
     if error_msg:
         flash(error_msg, "danger")
+
+    has_inference_results = bool(_collect_inference_runs(user_slug, mode, model_id))
     
     return render_template(
         'inference.html',
@@ -1600,6 +1803,7 @@ def inference():
         results      = results,
         metric_label = metric,
         color_table  = color_table,
+        has_inference_results = has_inference_results,
     )
 
 

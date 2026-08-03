@@ -2,14 +2,10 @@
 {% block title %}Inference - {{model.name}}{% endblock %}
 {% block content %}
 <div class="container-fluid py-4">
-    <!-- Main body -->
+
     <div class="container my-5">
-
         <div class="row">
-
-            <!-- LEFT COLUMN (Model Description) -->
             <div class="col-sm-4 col-12">
-                <!-- Form wraps the buttons so "Upload Images" triggers file selection and "Start Inference" submits -->
                 <form method="POST" action="{{ url_for('inference', id=model_id, mode=mode) }}" enctype="multipart/form-data" id="inference-form">
                     <div class="p-4 rounded shadow-sm bg-secondary-subtle">
                         <h3 class="text-center mb-4">Model Information</h3>
@@ -34,67 +30,57 @@
                             </tbody>
                         </table>
                         <hr>
+
+                        <div class="mb-3">
+                            {% if has_inference_results %}
+                            <a class="inference-results-status available" href="{{ url_for('inference_results', id=model_id, mode=mode) }}">Inference Results Available</a>
+                            {% else %}
+                            <span class="inference-results-status unavailable" aria-disabled="true">Inference Results Not Available</span>
+                            {% endif %}
+                        </div>
+                        <hr>
+
                         <div class="d-flex flex-column gap-3 mt-4">
                             <button type="button" id="upload-btn" class="btn btn-outline-primary bg-white btn-lg w-100">Upload Images</button>
-                            <!-- <button type="button" class="btn btn-outline-secondary btn-lg w-100">Select from Database</button> -->
                             <div id="file-count" class="text-center text-muted small mt-2">No files selected</div>
                             <button type="submit" class="btn btn-success btn-lg w-100 mt-3">Start Inference</button>
-    
-                            <!-- Loader: shown by static/js/loader.js when the form is submitted -->
+
                             <div class="loader" style="display:none; text-align:center; margin-top:0.75rem;">
                                 <div class="spinner-border text-success" role="status" aria-hidden="true" style="vertical-align:middle;"></div>
                                 <div class="small text-muted" style="display:inline-block; margin-left:0.5rem; vertical-align:middle;">
-                                    Running inference…
+                                    Running inference...
                                 </div>
                             </div>
                         </div>
-    
+
                         {% if mode == 'classification' %}
-                            <input id="file-input" name="file" type="file" accept="image/*" multiple style="display:none;">
+                        <input id="file-input" name="file" type="file" accept="image/*" multiple style="display:none;">
                         {% else %}
-                            <input id="file-input" name="image" type="file" accept="image/*" multiple style="display:none;">
+                        <input id="file-input" name="image" type="file" accept="image/*" multiple style="display:none;">
                         {% endif %}
                     </div>
                 </form>
             </div>
-    
-            <!-- RIGHT COLUMN (Inference Results) -->
+
             <div class="col-sm-8 col-12">
-                <!-- Mask Legend -->
                 {% if color_table %}
                 <div class="mb-4 mt-sm-0 mt-4">
                     <h5 class="mb-3">Mask Legend</h5>
-    
                     <div class="d-flex flex-wrap gap-2">
-    
                         {% for entry in color_table %}
-                        <div class="d-inline-flex align-items-center rounded-pill px-3 py-1 border bg-light bg-opacity-50"
-                            style="font-size: 0.85rem;">
-    
-                            <!-- Color dot -->
-                            <span class="rounded-circle me-2 border"
-                                style="
-                                    width: 14px;
-                                    height: 14px;
-                                    display: inline-block;
-                                    background: {{ entry.hex }};
-                                ">
-                            </span>
-    
-                            <!-- Label text -->
+                        <div class="d-inline-flex align-items-center rounded-pill px-3 py-1 border bg-light bg-opacity-50" style="font-size: 0.85rem;">
+                            <span class="rounded-circle me-2 border" style="width: 14px; height: 14px; display: inline-block; background: {{ entry.hex }};"></span>
                             <span class="text-capitalize text-muted">{{ entry.label }}</span>
                         </div>
                         {% endfor %}
                     </div>
                 </div>
                 {% endif %}
-    
-                <!-- Results -->
+
                 {% if results %}
                 <div class="table-responsive mb-4 mt-sm-0 mt-4">
+                    <h5 class="mb-2">Inference Results</h5>
                     <table class="table table-striped">
-                        <h5 class="mb-3">Inference Results</h5>
-                        <!-- Classification mode -->
                         {% if mode == 'classification' %}
                         <thead>
                             <tr>
@@ -106,29 +92,21 @@
                         <tbody>
                             {% for result in results %}
                             <tr>
-                                <td>
-                                    {{ result.get('filename', result.get('name', 'file'))}}
-                                </td>
+                                <td>{{ result.get('filename', result.get('name', 'file')) }}</td>
                                 <td>
                                     <div class="d-flex flex-column align-items-center gap-2">
-                                        <img src="{{ result.get('input_file') }}"
-                                            alt="{{ result.get('filename','image') }}"
-                                            class="img-thumbnail"
-                                            style="max-height:200px;">
+                                        <img src="{{ result.get('input_file') }}" alt="{{ result.get('filename', 'image') }}" class="img-thumbnail" style="max-height:200px;">
                                         <a href="{{ result.get('input_file') }}" download class="btn btn-outline-primary btn-sm">Download Image</a>
                                     </div>
                                 </td>
                                 <td>
                                     {% if result.get('gradcam_file') %}
-                                        <div class="d-flex flex-column align-items-center gap-2">
-                                            <img src="{{ result.get('gradcam_file') }}"
-                                                alt="Grad-CAM"
-                                                class="img-thumbnail"
-                                                style="max-height:200px;">
-                                            <a href="{{ result.get('gradcam_file') }}" download class="btn btn-outline-primary btn-sm">Download Grad-CAM</a>
-                                        </div>
+                                    <div class="d-flex flex-column align-items-center gap-2">
+                                        <img src="{{ result.get('gradcam_file') }}" alt="Grad-CAM" class="img-thumbnail" style="max-height:200px;">
+                                        <a href="{{ result.get('gradcam_file') }}" download class="btn btn-outline-primary btn-sm">Download Grad-CAM</a>
+                                    </div>
                                     {% else %}
-                                        N/A
+                                    N/A
                                     {% endif %}
                                 </td>
                             </tr>
@@ -172,7 +150,6 @@
                             {% endfor %}
                         </tbody>
                         {% else %}
-                        <!-- Other modes -->
                         <thead>
                             <tr>
                                 <th>Name</th>
@@ -183,9 +160,7 @@
                         <tbody>
                             {% for result in results %}
                             <tr>
-                                <td>
-                                    {{ result.get('input_image').split('/')[-1] }}
-                                </td>
+                                <td>{{ result.get('input_image').split('/')[-1] }}</td>
                                 <td>
                                     <div class="d-flex flex-column align-items-center gap-2">
                                         <img src="{{ result.get('input_image') }}" alt="image" class="img-thumbnail" style="max-height: 200px;">
@@ -204,8 +179,18 @@
                         {% endif %}
                     </table>
                 </div>
+                {% else %}
+                <div class="p-4 rounded shadow-sm bg-light mt-sm-0 mt-4">
+                    <h5 class="mb-2">Live Inference</h5>
+                    <p class="text-muted mb-0">
+                        Upload images and run inference from this page.
+                        {% if has_inference_results %}
+                        Past runs are available on the <a href="{{ url_for('inference_results', id=model_id, mode=mode) }}">inference results page</a>.
+                        {% endif %}
+                    </p>
+                </div>
+                {% endif %}
             </div>
-            {% endif %}
         </div>
     </div>
 </div>
