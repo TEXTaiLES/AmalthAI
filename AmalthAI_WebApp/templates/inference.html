@@ -107,54 +107,26 @@
                             {% for result in results %}
                             <tr>
                                 <td>
-                                    <button type="button" class="btn btn-link p-0" data-bs-toggle="modal" data-bs-target="#modal-{{ loop.index }}">
-                                        {{ result.get('filename', result.get('name', 'file'))}}
-                                    </button>
-                                    
-                                    <!-- Modal -->
-                                    <div class="modal fade" id="modal-{{ loop.index }}" tabindex="-1" aria-labelledby="modalLabel-{{ loop.index }}" aria-hidden="true">
-                                        <div class="modal-dialog modal-lg modal-dialog-centered">
-                                            <div class="modal-content">
-                                                <div class="modal-header">
-                                                    <h5 class="modal-title" id="modalLabel-{{ loop.index }}">
-                                                        {{ result.get('filename', result.get('name', 'file'))}}
-                                                    </h5>
-                                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                                </div>
-                                                <div class="modal-body d-flex flex-column flex-md-row justify-content-around align-items-center">
-                                                    <img src="{{ result.get('input_file') }}"
-                                                        class="img-fluid me-2"
-                                                        style="max-height:300px;">
-
-                                                    {% if result.get('gradcam_file') %}
-                                                    <img src="{{ result.get('gradcam_file') }}"
-                                                        class="img-fluid ms-2"
-                                                        style="max-height:300px;">
-                                                    {% endif %}
-                                                </div>
-                                                <div class="modal-footer">
-                                                    <a href="{{ result.get('input_file') }}" download class="btn btn-primary">Download Image</a>
-                                                    {% if result.get('gradcam_file') %}
-                                                    <a href="{{ result.get('gradcam_file') }}" download class="btn btn-primary">Download Grad-CAM</a>
-                                                    {% endif %}
-                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Back</button>
-                                                </div>
-                                            </div>
-                                        </div>
+                                    {{ result.get('filename', result.get('name', 'file'))}}
+                                </td>
+                                <td>
+                                    <div class="d-flex flex-column align-items-center gap-2">
+                                        <img src="{{ result.get('input_file') }}"
+                                            alt="{{ result.get('filename','image') }}"
+                                            class="img-thumbnail"
+                                            style="max-height:200px;">
+                                        <a href="{{ result.get('input_file') }}" download class="btn btn-outline-primary btn-sm">Download Image</a>
                                     </div>
                                 </td>
                                 <td>
-                                    <img src="{{ result.get('input_file') }}"
-                                        alt="{{ result.get('filename','image') }}"
-                                        class="img-thumbnail"
-                                        style="max-height:200px;">
-                                </td>
-                                <td>
                                     {% if result.get('gradcam_file') %}
-                                        <img src="{{ result.get('gradcam_file') }}"
-                                            alt="Grad-CAM"
-                                            class="img-thumbnail"
-                                            style="max-height:200px;">
+                                        <div class="d-flex flex-column align-items-center gap-2">
+                                            <img src="{{ result.get('gradcam_file') }}"
+                                                alt="Grad-CAM"
+                                                class="img-thumbnail"
+                                                style="max-height:200px;">
+                                            <a href="{{ result.get('gradcam_file') }}" download class="btn btn-outline-primary btn-sm">Download Grad-CAM</a>
+                                        </div>
                                     {% else %}
                                         N/A
                                     {% endif %}
@@ -212,34 +184,20 @@
                             {% for result in results %}
                             <tr>
                                 <td>
-                                    <button type="button" class="btn btn-link p-0" data-bs-toggle="modal" data-bs-target="#modal-{{ loop.index }}">
-                                        {{ result.get('input_image').split('/')[-1] }}
-                                    </button>
-                                    
-                                    <!-- Modal -->
-                                    <div class="modal fade" id="modal-{{ loop.index }}" tabindex="-1" aria-labelledby="modalLabel-{{ loop.index }}" aria-hidden="true">
-                                        <div class="modal-dialog modal-lg modal-dialog-centered">
-                                            <div class="modal-content">
-                                                <div class="modal-header">
-                                                    <h5 class="modal-title" id="modalLabel-{{ loop.index }}">
-                                                        {{ result.get('input_image').split('/')[-1] }}
-                                                    </h5>
-                                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                                </div>
-                                                <div class="modal-body d-flex flex-column flex-md-row justify-content-around align-items-center">
-                                                    <img src="{{ result.get('input_image') }}" alt="input image" class="img-fluid me-2" style="max-height: 300px;">
-                                                    <img src="{{ result.get('output_image') }}" alt="output mask" class="img-fluid ms-2" style="max-height: 300px;">
-                                                </div>
-                                                <div class="modal-footer">
-                                                    <a href="{{ result.get('output_image') }}" download class="btn btn-primary">Download</a>
-                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Back</button>
-                                                </div>
-                                            </div>
-                                        </div>
+                                    {{ result.get('input_image').split('/')[-1] }}
+                                </td>
+                                <td>
+                                    <div class="d-flex flex-column align-items-center gap-2">
+                                        <img src="{{ result.get('input_image') }}" alt="image" class="img-thumbnail" style="max-height: 200px;">
+                                        <a href="{{ result.get('input_image') }}" download class="btn btn-outline-primary btn-sm">Download Image</a>
                                     </div>
                                 </td>
-                                <td><img src="{{ result.get('input_image') }}" alt="image" class="img-thumbnail" style="max-height: 200px;"></td>
-                                <td><img src="{{ result.get('output_image') }}" alt="mask" class="img-thumbnail" style="max-height: 200px;"></td>
+                                <td>
+                                    <div class="d-flex flex-column align-items-center gap-2">
+                                        <img src="{{ result.get('output_image') }}" alt="mask" class="img-thumbnail" style="max-height: 200px;">
+                                        <a href="{{ result.get('output_image') }}" download class="btn btn-outline-primary btn-sm">Download Output</a>
+                                    </div>
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
