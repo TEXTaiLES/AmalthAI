@@ -27,12 +27,15 @@ from utils.zip_utils import safe_extract_zip
 # Yaml config
 config = load_config("config.yml")
 
+# Connection with docker containers
 client = docker.from_env()
 
+# App initialization
 app = Flask(__name__)
 app.config["SECRET_KEY"] = config["flask"]["secret_key"]
 app.config.from_file('config.toml', load=tomllib.load, text=False)
 
+# Login and logout routes
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if current_user.is_authenticated:
@@ -56,10 +59,10 @@ DIRECTUS_BASE_URL = config.get("directus", {}).get("base_url")
 DIRECTUS_LOGIN_URL = config.get("directus", {}).get("login_url")
 SHARED_REFRESH_COOKIE_NAME = config.get("textailes-token", {}).get("token")
 
-BASE_HOST_PATH      = config.get("paths").get("base_host_path")
-BASE_HOST_PATH_OUT      = config.get("paths").get("base_host_path_out")
-IMAGE_SEGM_CLS  = config.get("images").get("classification")
-IMAGE_OD        = config.get("images").get("detection")
+BASE_HOST_PATH = config.get("paths").get("base_host_path")
+BASE_HOST_PATH_OUT = config.get("paths").get("base_host_path_out")
+IMAGE_SEGM_CLS = config.get("images").get("classification")
+IMAGE_OD = config.get("images").get("detection")
 
 # HESTIA data-lake integration
 HESTIA_ENABLED = bool(config.get("hestia", {}).get("enabled"))
@@ -265,12 +268,10 @@ def user_inference_files(filename):
     return send_from_directory(data_dir, filename)
 
 
-
 @app.route('/')
 @login_required
 def index():
     return render_template('index.html', is_homepage=True)
-
 
 
 @app.route('/dataset')
@@ -339,7 +340,6 @@ def dataset():
         pager_size_options = pager_size_options,
         num_pages          = num_pages,
     )
-
 
 
 def _merged_datasets(user_slug, mode, mode_short):
