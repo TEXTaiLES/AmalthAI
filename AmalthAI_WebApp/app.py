@@ -1343,9 +1343,12 @@ def inference():
                 output_data_dir = output_dir
                 output_files    = glob.glob(os.path.join(output_data_dir, '*.png')) + glob.glob(os.path.join(output_data_dir, '*.jpg'))
                 
-                # Create a mapping of output files by name
-                output_map = {os.path.basename(f): f for f in output_files}
-                
+                # Create a mapping of output files by name (without extension)
+                output_map = {}
+                for f in output_files:
+                    base = os.path.splitext(os.path.basename(f))[0]
+                    output_map[base] = f
+
                 # Process each uploaded file and match with output
                 for file in files:
                     if file.filename:
@@ -1355,11 +1358,14 @@ def inference():
                         # Find matching output file
                         output_image = None
                         base_name    = os.path.splitext(filename)[0]
-                        for output_name, output_path in output_map.items():
-                            if base_name in output_name:
-                                output_image = url_for("user_inference_files", filename=f"segmentation/outputs/{model_id}/{timestamp}/{output_name}")
-                                break
-                        
+
+                        if base_name in output_map:
+                            output_path     = output_map[base_name]
+                            output_filename = os.path.basename(output_path)
+                            output_image = url_for("user_inference_files", filename=f"segmentation/outputs/{model_id}/{timestamp}/{output_filename}")
+                        else:
+                            print(f"WARNING: No output found for {filename}")
+
                         results.append({
                             'input_image' : input_image,
                             'output_image': output_image
