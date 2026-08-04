@@ -1515,22 +1515,25 @@ def inference():
                 os.makedirs(save_dir, exist_ok=True)
                 os.makedirs(output_dir, exist_ok=True)
 
-                # Process each file individually
+                # Save all uploaded files first
+                filenames = []
                 for file in files:
                     if file.filename:
                         filename = secure_filename(file.filename)
                         filepath = os.path.join(save_dir, filename)
                         file.save(filepath)
+                        filenames.append(filename)
 
-                    # Temporary container creation
-                    container = client.containers.run(
-                        IMAGE_SEGM_CLS,
-                        command="sleep infinity",
-                        detach=True,
-                        volumes={BASE_HOST_PATH_OUT: {"bind": "/data", "mode": "rw"}}
-                    )
+                # Single container for the whole batch
+                container = client.containers.run(
+                    IMAGE_SEGM_CLS,
+                    command="sleep infinity",
+                    detach=True,
+                    volumes={BASE_HOST_PATH_OUT: {"bind": "/data", "mode": "rw"}}
+                )
 
-                    try:
+                try:
+                    for filename in filenames:
                         # Run inference
                         container.exec_run([
                             "python", "/data/Classification/inference.py",
@@ -1541,14 +1544,16 @@ def inference():
                             "--output_dir", f"/data/{user_slug}/inference/classification/outputs/{model_id}/{timestamp}/"
                         ])
 
-                        container.exec_run([
-                            "chown", "-R", chown_target(config), f"/data/{user_slug}/inference/classification/outputs/"
-                        ])
+                    container.exec_run([
+                        "chown", "-R", chown_target(config), f"/data/{user_slug}/inference/classification/outputs/"
+                    ])
 
-                    finally:
-                        container.stop()
-                        container.remove()
+                finally:
+                    container.stop()
+                    container.remove()
 
+                # Collect results for each file after the batch has run
+                for filename in filenames:
                     input_file = url_for("user_inference_files", filename=f"classification/inputs/{model_id}/{timestamp}/{filename}")
 
                     # Find the corresponding output file by matching the base name
