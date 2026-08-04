@@ -646,6 +646,7 @@ def process_dataset(mode, zip_path, num_classes=None, user_slug=None):
         train_lbl = os.path.join(tmp_dir, "train/labels")
 
         if not os.path.exists(train_img) or not os.path.exists(train_lbl):
+            shutil.rmtree(tmp_dir, ignore_errors=True)
             return False, "Invalid YOLO structure: missing train/images or train/labels", None
 
         ok, img_set, lbl_set = same_files_no_ext(train_img, train_lbl)
@@ -659,6 +660,7 @@ def process_dataset(mode, zip_path, num_classes=None, user_slug=None):
         val_lbl = os.path.join(tmp_dir, "valid/labels")
 
         if not os.path.exists(val_img) or not os.path.exists(val_lbl):
+            shutil.rmtree(tmp_dir, ignore_errors=True)
             return False, "Invalid YOLO structure: missing valid/images or valid/labels", None
 
         ok, img_set, lbl_set = same_files_no_ext(val_img, val_lbl)
@@ -765,8 +767,14 @@ def process_dataset(mode, zip_path, num_classes=None, user_slug=None):
 @app.route('/dataset_submit', methods=["POST"])
 @login_required
 def dataset_submit():
-    mode        = request.form.get('mode')
+    mode = request.form.get('mode')
+
     num_classes = request.form.get('num_classes')
+    try:
+        num_classes = int(num_classes)
+    except (TypeError, ValueError):
+        return redirect(url_for("collections", mode=mode, msg="Invalid number of classes", msg_type="danger"))
+        
     filename = secure_filename(request.form.get('dataset_zip', ''))
 
     user_slug = get_current_user_slug()
@@ -1374,7 +1382,9 @@ def inference():
                             'input_image' : input_image,
                             'output_image': output_image
                         })
-            
+
+                success_msg = f"Inference for {len(files)} image(s) completed!"
+
             # Load datasets coloring to propagate it to the inference page
             if dataset_name:
                 dataset_file = os.path.join(user_root(user_slug), "Datasets", "Segmentation", dataset_name, "labelmap.txt")
@@ -1398,8 +1408,6 @@ def inference():
                                     "rgb": f"rgb({r},{g},{b})",
                                     "hex": "#{:02x}{:02x}{:02x}".format(r, g, b)
                                 })
-                
-                success_msg = f"Inference for {len(files)} image(s) completed!"
 
             # HESTIA: persist inference inputs + outputs (non-fatal).
             if HESTIA_ENABLED and hestia_model and files:
@@ -1604,7 +1612,7 @@ def inference():
                     except Exception as e:
                         app.logger.warning(f"HESTIA inference persist failed: {e}")
 
-            success_msg = f"Inference for {len(files)} image(s) completed!"
+                success_msg = f"Inference for {len(files)} image(s) completed!"
     
     if success_msg: 
         flash(success_msg, "info")
