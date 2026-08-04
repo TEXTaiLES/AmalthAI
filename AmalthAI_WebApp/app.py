@@ -19,6 +19,7 @@ from datetime import datetime
 from utils.auth import init_auth
 from utils.models_page import write_results
 from utils.helpers import load_datasets, load_models_available, load_dataset_info, get_max_image_size, load_models, get_best_timestamp
+from utils.job_status import _job_status_path, _mark_stale_if_dead, _write_job_status, _read_job_status, _run_training_job
 from utils.load_config import load_config, chown_target
 from utils import hestia_client as hc
 from utils.zip_utils import safe_extract_zip
@@ -145,106 +146,6 @@ _fetch_current_identity = auth_helpers["fetch_current_identity"]
 _auth_cookie_domain = auth_helpers["auth_cookie_domain"]
 _auth_cookie_secure = auth_helpers["auth_cookie_secure"]
 _directus_payload = auth_helpers["directus_payload"]
-
-
-# If a "running" job hasn't updated its heartbeat within this many seconds,
-# we treat it as dead (e.g. platform/container crashed mid-training).
-TRAIN_JOB_HEARTBEAT_INTERVAL = 15
-TRAIN_JOB_STALE_TIMEOUT = 90  # 6x the heartbeat interval
-
-
-def _job_status_path(user_slug, job_id):
-    return os.path.join(user_root(user_slug), "train_jobs", f"{job_id}.json")
-
-
-def _mark_stale_if_dead(user_slug, job_id, status):
-    """If status is 'running' but its heartbeat is too old, rewrite it as
-    'failed' on disk and return the corrected status. Otherwise return as-is."""
-    if not status or status.get("status") != "running":
-        return status
-
-    last_heartbeat = status.get("last_heartbeat")
-    if last_heartbeat is None:
-        stale = True
-    else:
-        stale = (time.time() - last_heartbeat) > TRAIN_JOB_STALE_TIMEOUT
-
-    if stale:
-        status["status"] = "failed"
-        status["error"] = "Training lost contact with the server (no heartbeat)."
-        _write_job_status(user_slug, job_id, status)
-
-    return status
-
-
-def _write_job_status(user_slug, job_id, data):
-    path = _job_status_path(user_slug, job_id)
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    tmp_path = f"{path}.tmp-{os.getpid()}-{threading.get_ident()}"
-    with open(tmp_path, "w", encoding="utf-8") as handle:
-        json.dump(data, handle)
-    os.replace(tmp_path, path)
-
-
-def _read_job_status(user_slug, job_id):
-    path = _job_status_path(user_slug, job_id)
-    if not os.path.exists(path):
-        return None
-    with open(path, "r", encoding="utf-8") as handle:
-        return json.load(handle)
-
-
-def _run_training_job(user_slug, job_id, cmd, mode, paths):
-    # experiment_id / dataset_id / owner_email were stashed in the job status at
-    # submit time (this thread has no Flask request context, so current_user is
-    # unavailable here).
-    prior = _read_job_status(user_slug, job_id) or {}
-    experiment_id = prior.get("experiment_id")
-    dataset_id = prior.get("dataset_id")
-    owner_email = prior.get("owner_email")
-
-    try:
-        proc = subprocess.Popen(cmd)
-
-        # Poll instead of blocking so we can periodically persist a heartbeat.
-        # If this loop stops running (process killed, container crashed, host
-        # dies), the json on disk simply stops getting fresh timestamps, and
-        # _mark_stale_if_dead() will later notice and flip it to "failed".
-        while True:
-            returncode = proc.poll()
-            if returncode is not None:
-                break
-            prior["status"] = "running"
-            prior["last_heartbeat"] = time.time()
-            _write_job_status(user_slug, job_id, prior)
-            time.sleep(TRAIN_JOB_HEARTBEAT_INTERVAL)
-
-        process = subprocess.CompletedProcess(cmd, returncode)
-        if process.returncode == 0:
-            write_results(*paths[mode])
-            status = {"status": "succeeded", "return_code": process.returncode}
-            if HESTIA_ENABLED:
-                try:
-                    _push_trained_model_to_hestia(
-                        user_slug, mode, paths[mode], experiment_id, dataset_id, owner_email)
-                except Exception as exc:
-                    app.logger.warning(f"HESTIA model push failed: {exc}")
-        else:
-            status = {"status": "failed", "return_code": process.returncode}
-            if HESTIA_ENABLED and experiment_id:
-                hc.update_experiment(experiment_id, status="failed",
-                                     error=f"training exited with code {process.returncode}")
-    except Exception as exc:
-        status = {"status": "failed", "return_code": None, "error": str(exc)}
-        if HESTIA_ENABLED and experiment_id:
-            hc.update_experiment(experiment_id, status="failed", error=str(exc))
-
-    # Carry the HESTIA linkage through to the final status (for history/debugging).
-    for key in ("experiment_id", "dataset_id", "owner_email"):
-        if prior.get(key):
-            status[key] = prior[key]
-    _write_job_status(user_slug, job_id, status)
-
 
 def _dataset_manifest(mode, final_path, num_classes):
     """Best-effort, mode-aware manifest describing a validated dataset directory."""
@@ -1124,6 +1025,8 @@ def train_model_submit():
         ]
     }
     
+    cmd = subprocesses[mode]
+
     job_id = str(uuid.uuid4())
     job_status = {"status": "running", "mode": mode, "last_heartbeat": time.time()}
 
@@ -1162,11 +1065,11 @@ def train_model_submit():
         except Exception as e:
             app.logger.warning(f"HESTIA train setup failed: {e}")
 
-    _write_job_status(user_slug, job_id, job_status)
+    _write_job_status(user_root, user_slug, job_id, job_status)
 
     thread = threading.Thread(
         target=_run_training_job,
-        args=(user_slug, job_id, subprocesses[mode], mode, paths),
+        args=(user_root, user_slug, job_id, cmd, mode, paths, HESTIA_ENABLED, _push_trained_model_to_hestia, app.logger),
         daemon=True,
     )
     thread.start()
@@ -1178,10 +1081,10 @@ def train_model_submit():
 @login_required
 def train_status(job_id):
     user_slug = get_current_user_slug()
-    status = _read_job_status(user_slug, job_id)
+    status = _read_job_status(user_root, user_slug, job_id)
     if not status:
         return jsonify({"error": "job_not_found"}), 404
-    status = _mark_stale_if_dead(user_slug, job_id, status)
+    status = _mark_stale_if_dead(user_root, user_slug, job_id, status)
     return jsonify(status)
 
 @app.route('/train_jobs/active', methods=["GET"])
@@ -1192,8 +1095,8 @@ def active_train_jobs():
     active = []
     for path in glob.glob(os.path.join(jobs_dir, "*.json")):
         job_id = os.path.splitext(os.path.basename(path))[0]
-        status = _read_job_status(user_slug, job_id)
-        status = _mark_stale_if_dead(user_slug, job_id, status)
+        status = _read_job_status(user_root, user_slug, job_id)
+        status = _mark_stale_if_dead(user_root, user_slug, job_id, status)
         if status and status.get("status") == "running":
             status["job_id"] = job_id
             active.append(status)
