@@ -588,7 +588,7 @@ def process_dataset(mode, zip_path, num_classes=None, user_slug=None):
     try:
         safe_extract_zip(zip_path, tmp_dir)
     except Exception as e:
-        return False, f"Failed to unzip: {e}"
+        return False, f"Failed to unzip: {e}", None
 
     # If the zip contains a single folder, use that as root
     ins_folder = os.listdir(tmp_dir)
@@ -614,7 +614,7 @@ def process_dataset(mode, zip_path, num_classes=None, user_slug=None):
         for r in req:
             if not os.path.exists(os.path.join(tmp_dir, r)):
                 shutil.rmtree(tmp_dir, ignore_errors=True)
-                return False, f"Missing: {r}"
+                return False, f"Missing: {r}", None
         
         # Check that images/train and masks/train match
         img_train = os.path.join(tmp_dir, "images/train")
@@ -624,7 +624,7 @@ def process_dataset(mode, zip_path, num_classes=None, user_slug=None):
         if not ok:
             missing_masks = img_set - msk_set
             missing_images = msk_set - img_set
-            return False, f"Train mismatch. Images missing masks: {missing_masks}, masks missing images: {missing_images}"
+            return False, f"Train mismatch. Images missing masks: {missing_masks}, masks missing images: {missing_images}", None
 
         # Check that images/val and masks/val match
         img_val = os.path.join(tmp_dir, "images/val")
@@ -634,38 +634,38 @@ def process_dataset(mode, zip_path, num_classes=None, user_slug=None):
         if not ok:
             missing_masks = img_set - msk_set
             missing_images = msk_set - img_set
-            return False, f"Val mismatch. Images missing masks: {missing_masks}, masks missing images: {missing_images}"
+            return False, f"Val mismatch. Images missing masks: {missing_masks}, masks missing images: {missing_images}", None
 
     elif mode == "detection":
         if not os.path.isfile(os.path.join(tmp_dir, "data.yaml")):
             shutil.rmtree(tmp_dir, ignore_errors=True)
-            return False, "Missing data.yaml"
+            return False, "Missing data.yaml", None
         
         # Check OD train split
         train_img = os.path.join(tmp_dir, "train/images")
         train_lbl = os.path.join(tmp_dir, "train/labels")
 
         if not os.path.exists(train_img) or not os.path.exists(train_lbl):
-            return False, "Invalid YOLO structure: missing train/images or train/labels"
+            return False, "Invalid YOLO structure: missing train/images or train/labels", None
 
         ok, img_set, lbl_set = same_files_no_ext(train_img, train_lbl)
         if not ok:
             missing_labels = img_set - lbl_set
             missing_images = lbl_set - img_set
-            return False, f"Train mismatch. Images missing labels: {missing_labels}, labels missing images: {missing_images}"
+            return False, f"Train mismatch. Images missing labels: {missing_labels}, labels missing images: {missing_images}", None
 
         # Check OD val split
         val_img = os.path.join(tmp_dir, "valid/images")
         val_lbl = os.path.join(tmp_dir, "valid/labels")
 
         if not os.path.exists(val_img) or not os.path.exists(val_lbl):
-            return False, "Invalid YOLO structure: missing valid/images or valid/labels"
+            return False, "Invalid YOLO structure: missing valid/images or valid/labels", None
 
         ok, img_set, lbl_set = same_files_no_ext(val_img, val_lbl)
         if not ok:
             missing_labels = img_set - lbl_set
             missing_images = lbl_set - img_set
-            return False, f"Val mismatch. Images missing labels: {missing_labels}, labels missing images: {missing_images}"
+            return False, f"Val mismatch. Images missing labels: {missing_labels}, labels missing images: {missing_images}", None
 
     elif mode == "classification":
         def validate_class_dir(root_dir, split_label):
@@ -706,12 +706,12 @@ def process_dataset(mode, zip_path, num_classes=None, user_slug=None):
             ok, train_classes = validate_class_dir(train_dir, "train")
             if not ok:
                 shutil.rmtree(tmp_dir, ignore_errors=True)
-                return False, train_classes
+                return False, train_classes, None
 
             ok, val_classes = validate_class_dir(val_dir, "val")
             if not ok:
                 shutil.rmtree(tmp_dir, ignore_errors=True)
-                return False, val_classes
+                return False, val_classes, None
 
             if train_classes != val_classes:
                 shutil.rmtree(tmp_dir, ignore_errors=True)
@@ -720,7 +720,7 @@ def process_dataset(mode, zip_path, num_classes=None, user_slug=None):
                 return False, (
                     "Train/val class mismatch. "
                     f"Missing in train: {missing_train}, missing in val: {missing_val}"
-                )
+                ), None
         else:
             subdirs = [
                 d for d in os.listdir(tmp_dir)
@@ -728,7 +728,7 @@ def process_dataset(mode, zip_path, num_classes=None, user_slug=None):
             ]
             if len(subdirs) != int(num_classes):
                 shutil.rmtree(tmp_dir, ignore_errors=True)
-                return False, f"Expected {num_classes} class folders, found {len(subdirs)}"
+                return False, f"Expected {num_classes} class folders, found {len(subdirs)}", None
     
             for cls in subdirs:
                 cls_path = os.path.join(tmp_dir, cls)
@@ -737,16 +737,16 @@ def process_dataset(mode, zip_path, num_classes=None, user_slug=None):
                 # Must NOT be empty
                 if len(contents) == 0:
                     shutil.rmtree(tmp_dir, ignore_errors=True)
-                    return False, f"Class '{cls}' is empty"
+                    return False, f"Class '{cls}' is empty", None
 
                 # Must NOT contain directories
                 for item in contents:
                     if os.path.isdir(os.path.join(cls_path, item)):
                         shutil.rmtree(tmp_dir, ignore_errors=True)
-                        return False, f"Class '{cls}' contains a folder ('{item}') but only image files are allowed"
+                        return False, f"Class '{cls}' contains a folder ('{item}') but only image files are allowed", None
 
     else:
-        return False, "Unknown mode"
+        return False, "Unknown mode", None
 
     # Move to the Datasets Folder
     final_root = DEST_PATHS[mode]
@@ -777,9 +777,7 @@ def dataset_submit():
         flash(error_msg, "danger")
         return redirect(url_for("collections", mode=mode, msg=error_msg, msg_type="danger"))
 
-    result = process_dataset(mode, zip_path, num_classes, user_slug=user_slug)
-    success, msg = result[0], result[1]
-    final_path = result[2] if len(result) > 2 else None
+    success, msg, final_path = process_dataset(mode, zip_path, num_classes, user_slug=user_slug)
 
     if not success:
         return redirect(url_for("collections", mode=mode, msg=msg, msg_type="danger"))
