@@ -767,10 +767,14 @@ def process_dataset(mode, zip_path, num_classes=None, user_slug=None):
 def dataset_submit():
     mode        = request.form.get('mode')
     num_classes = request.form.get('num_classes')
-    filename    = request.form.get('dataset_zip')
+    filename = secure_filename(request.form.get('dataset_zip', ''))
 
     user_slug = get_current_user_slug()
     zip_path = os.path.join(user_root(user_slug), "tmp_datasets_zips", filename)
+    zip_path = os.path.abspath(zip_path)
+    expected_dir = os.path.abspath(os.path.join(user_root(user_slug), "tmp_datasets_zips"))
+    if not zip_path.startswith(expected_dir + os.sep):
+        return "Forbidden", 403
 
     if not os.path.isfile(zip_path):
         error_msg = "Uploaded dataset zip not found"
@@ -1005,6 +1009,8 @@ def train_model_submit():
 
     selected_model      = request.form.get('model')
     selected_collection = request.form.get('collection')
+    if selected_collection:
+        selected_collection = secure_filename(selected_collection)
 
     # Advanced
     lr_left         = request.form.get('learning_rate_left')
