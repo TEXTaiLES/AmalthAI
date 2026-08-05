@@ -20,6 +20,8 @@ from utils.auth import init_auth
 from utils.models_page import write_results
 from utils.helpers import load_datasets, load_models_available, load_dataset_info, get_max_image_size, load_models, get_best_timestamp
 from utils.job_status import _job_status_path, _mark_stale_if_dead, _write_job_status, _read_job_status, _run_training_job
+from utils import user_paths
+from utils.user_paths import safe_user_slug, user_root, get_current_user_slug, get_current_user_email, ensure_user_folders
 from utils.load_config import load_config, chown_target
 from utils import hestia_client as hc
 from utils.zip_utils import safe_extract_zip
@@ -61,6 +63,7 @@ SHARED_REFRESH_COOKIE_NAME = config.get("textailes-token", {}).get("token")
 
 BASE_HOST_PATH = config.get("paths").get("base_host_path")
 BASE_HOST_PATH_OUT = config.get("paths").get("base_host_path_out")
+user_paths.init(BASE_HOST_PATH)
 IMAGE_SEGM_CLS = config.get("images").get("classification")
 IMAGE_OD = config.get("images").get("detection")
 
@@ -74,65 +77,13 @@ HESTIA_METRIC = {
     "detection": "mAP 50-95 Score",
     "classification": "Accuracy",
 }
+
 # AmalthAI dataset directories.
 HESTIA_DATASET_DIR = {
     "segmentation": "Segmentation",
     "detection": "Object-Detection",
     "classification": "Classification",
 }
-
-
-def safe_user_slug(email):
-    base = email.split("@", 1)[0].strip().lower()
-    return "".join(c for c in base if c.isalnum() or c in ("-", "_"))
-
-
-def user_root(slug):
-    return os.path.join(BASE_HOST_PATH, slug)
-
-
-def get_current_user_slug():
-    slug = getattr(current_user, "slug", None)
-    return slug or "guest"
-
-
-def get_current_user_email():
-    return getattr(current_user, "email", None)
-
-
-def ensure_model_db_file(path):
-    if not os.path.exists(path):
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w", encoding="utf-8") as handle:
-            handle.write("name,trained_on,score,date,checkpoint_path,config_path\n")
-
-
-def ensure_user_folders(slug):
-    root = user_root(slug)
-    paths = [
-        os.path.join(root, "Datasets", "Segmentation"),
-        os.path.join(root, "Datasets", "Object-Detection"),
-        os.path.join(root, "Datasets", "Classification"),
-        os.path.join(root, "Segmentation", "runs"),
-        os.path.join(root, "ObjectDetection", "runs"),
-        os.path.join(root, "Classification", "runs"),
-        os.path.join(root, "models_db"),
-        os.path.join(root, "exps"),
-        os.path.join(root, "inference", "segmentation"),
-        os.path.join(root, "inference", "detection"),
-        os.path.join(root, "inference", "classification"),
-        os.path.join(root, "tmp_datasets_zips"),
-        os.path.join(root, "tmp_datasets"),
-        os.path.join(root, "train_jobs"),
-    ]
-
-    for path in paths:
-        os.makedirs(path, exist_ok=True)
-
-    ensure_model_db_file(os.path.join(root, "models_db", "trained_models_db_segm.csv"))
-    ensure_model_db_file(os.path.join(root, "models_db", "trained_models_db_od.csv"))
-    ensure_model_db_file(os.path.join(root, "models_db", "trained_models_db_cls.csv"))
-
 
 auth_helpers = init_auth(
     app,
@@ -149,6 +100,7 @@ _fetch_current_identity = auth_helpers["fetch_current_identity"]
 _auth_cookie_domain = auth_helpers["auth_cookie_domain"]
 _auth_cookie_secure = auth_helpers["auth_cookie_secure"]
 _directus_payload = auth_helpers["directus_payload"]
+
 
 def _dataset_manifest(mode, final_path, num_classes):
     """Best-effort, mode-aware manifest describing a validated dataset directory."""
