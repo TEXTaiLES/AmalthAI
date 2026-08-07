@@ -16,12 +16,12 @@ parser.add_argument('--timestamp',type = str, required=True, help = "Timestamp")
 parser.add_argument('--rotate', type=str, default='false', choices=['true', 'false'], help='Enable rotation augmentation')
 parser.add_argument('--flip', type=str, default='false', choices=['true', 'false'], help='Enable flip augmentation')
 parser.add_argument('--scale', type=str, default='false', choices=['true', 'false'], help='Enable scale augmentation')
+parser.add_argument('--transfer_learning', type=str, default='true', choices=['true', 'false'], help='Start training from pretrained weights')
 
 args = parser.parse_args()
 
 # Load a model
-model = RTDETR("rtdetr-l.pt")  # build from YAML and transfer weights
-
+model = RTDETR("rtdetr-l.pt" if args.transfer_learning == "true" else "rtdetr-l.yaml")  # build from YAML and transfer weights
 current_time_micro = datetime.datetime.now().microsecond
 
 # Augmentations

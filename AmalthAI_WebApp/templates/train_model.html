@@ -75,6 +75,14 @@
                     <option value=" ">All the above</option>
                 </select>
 
+                {% if mode in ["classification", "detection"] %}
+                <label class="form-label">Transfer Learning</label>
+                <select class="form-select mb-3" id="transferLearningSelect">
+                    <option value="true" selected>Enabled</option>
+                    <option value="false">Disabled</option>
+                </select>
+                {% endif %}
+
                 <label class="form-label">Collection</label>
                 <select class="form-select" id="collectionSelect">
                     <option selected disabled>Choose collection</option>

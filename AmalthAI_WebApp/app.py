@@ -525,6 +525,7 @@ def train_model_submit():
     mode = request.form.get('mode')
 
     selected_model      = request.form.get('model')
+    transfer_learning   = request.form.get('transfer_learning', 'true')
     selected_collection = request.form.get('collection')
     if selected_collection:
         selected_collection = secure_filename(selected_collection)
@@ -594,6 +595,7 @@ def train_model_submit():
         "--flip", bool_str(flip_enabled),
         "--scale", bool_str(scale_enabled),
         "--dataset_already_split", bool_str(cls_split_flag),
+        "--transfer_learning", bool_str(transfer_learning),
     ]
 
     # Detection command
@@ -604,6 +606,7 @@ def train_model_submit():
         "--rotate", bool_str(rotate_enabled),
         "--flip", bool_str(flip_enabled),
         "--scale", bool_str(scale_enabled),
+        "--transfer_learning", bool_str(transfer_learning),
     ]
 
     subprocesses = {

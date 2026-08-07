@@ -4,6 +4,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const modelSelect = document.getElementById("modelSelect");
     const collectionSelect = document.getElementById("collectionSelect");
+    const transferLearningSelect = document.getElementById("transferLearningSelect");
 
     const modeInput = document.getElementById("mode");
     const mode = modeInput ? modeInput.value : "segmentation";
@@ -169,6 +170,7 @@ document.addEventListener("DOMContentLoaded", () => {
         formData.append("mode", mode);
         localStorage.setItem("trainingMode", mode);
         formData.append("model", modelSelect.value);
+        if (transferLearningSelect) formData.append("transfer_learning", transferLearningSelect.value);
         formData.append("collection", collectionSelect.value);
 
         // Add all advanced fields

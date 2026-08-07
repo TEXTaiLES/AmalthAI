@@ -173,7 +173,7 @@ def conduct_experiment_seg(model_selection, timestamp_path, dataset, lr_left, lr
     # Return the last status type
     return last_status_type
 
-def conduct_experiment_od(model_selection, timestamp_path, dataset, lr_left, lr_right, bs_left, bs_right, epochs_left, epochs_right, rotate, flip, scale, user_slug):
+def conduct_experiment_od(model_selection, timestamp_path, dataset, lr_left, lr_right, bs_left, bs_right, epochs_left, epochs_right, rotate, flip, scale, user_slug, transfer_learning):
     basic_yolo_katib_experiment = {
         "apiVersion": "kubeflow.org/v1beta1",
         "kind": "Experiment",
@@ -245,7 +245,8 @@ def conduct_experiment_od(model_selection, timestamp_path, dataset, lr_left, lr_
                                             "--timestamp", timestamp_path,
                                             "--rotate", str(rotate),
                                             "--flip", str(flip),
-                                            "--scale", str(scale)
+                                            "--scale", str(scale),
+                                            "--transfer_learning", str(transfer_learning).lower()
                                         ],
                                         "volumeMounts": [
                                             {"mountPath": "/dev/shm", "name": "shm"},
@@ -289,7 +290,8 @@ def conduct_experiment_od(model_selection, timestamp_path, dataset, lr_left, lr_
         "--timestamp", timestamp_path,
         "--rotate", str(rotate).lower(),
         "--flip", str(flip).lower(),
-        "--scale", str(scale).lower()
+        "--scale", str(scale).lower(),
+        "--transfer_learning", str(transfer_learning).lower()
     ]
 
     exp_dir = os.path.join(BASE_HOST_PATH, user_slug, "exps")
@@ -324,7 +326,7 @@ def conduct_experiment_od(model_selection, timestamp_path, dataset, lr_left, lr_
     # Return the last status type
     return last_status_type
 
-def conduct_experiment_cls(model_selection, timestamp_path, dataset, lr_left, lr_right, bs_left, bs_right, epochs_left, epochs_right, blur, rotate, flip, scale, dataset_already_split, user_slug):
+def conduct_experiment_cls(model_selection, timestamp_path, dataset, lr_left, lr_right, bs_left, bs_right, epochs_left, epochs_right, blur, rotate, flip, scale, dataset_already_split, user_slug, transfer_learning):
     basic_classification_katib_experiment = {
         "apiVersion": "kubeflow.org/v1beta1",
         "kind": "Experiment",
@@ -399,7 +401,8 @@ def conduct_experiment_cls(model_selection, timestamp_path, dataset, lr_left, lr
                                             "--rotate", rotate,
                                             "--flip", flip,
                                             "--scale", scale,
-                                            "--dataset_already_split", str(dataset_already_split).lower()
+                                            "--dataset_already_split", str(dataset_already_split).lower(),
+                                            "--transfer_learning", str(transfer_learning).lower()
                                         ],
                                         "volumeMounts": [
                                             {"mountPath": "/dev/shm", "name": "shm"},
@@ -446,7 +449,8 @@ def conduct_experiment_cls(model_selection, timestamp_path, dataset, lr_left, lr
         "--rotate", str(rotate).lower(),
         "--flip", str(flip).lower(),
         "--scale", str(scale).lower(),
-        "--dataset_already_split", str(dataset_already_split).lower()
+        "--dataset_already_split", str(dataset_already_split).lower(),
+        "--transfer_learning", str(transfer_learning).lower()
     ]
 
     exp_dir = os.path.join(BASE_HOST_PATH, user_slug, "exps")

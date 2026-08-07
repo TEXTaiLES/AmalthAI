@@ -114,6 +114,13 @@ parser.add_argument(
     help="Dataset already split into train/val"
 )
 
+parser.add_argument(
+    "--transfer_learning",
+    type=str,
+    default="true",
+    help="Start training from pretrained weights"
+)
+
 # Sanity checks and parsing
 args = parser.parse_args()
 model_selection = args.model
@@ -133,6 +140,7 @@ rotate = args.rotate
 flip = args.flip
 scale = args.scale
 dataset_already_split = args.dataset_already_split
+transfer_learning = args.transfer_learning
 
 def get_timestamp_path():
     now = datetime.datetime.now()
@@ -149,7 +157,7 @@ if model_selection == "allmodels":
     all_success = True  # flag
 
     for model in models_list:
-        res = conduct_experiment_cls(model, timestamp_path, dataset, lr_left, lr_right, bs_left, bs_right, epoch_left, epoch_right, blur, rotate, flip, scale, dataset_already_split, user_slug)
+        res = conduct_experiment_cls(model, timestamp_path, dataset, lr_left, lr_right, bs_left, bs_right, epoch_left, epoch_right, blur, rotate, flip, scale, dataset_already_split, user_slug, transfer_learning)
         print(f"Last condition for {model}: {res}")
 
         if res != "Succeeded":
@@ -158,7 +166,7 @@ if model_selection == "allmodels":
     final_res = "Succeeded" if all_success else "Failed"
 
 else:
-    final_res = conduct_experiment_cls(model_selection, timestamp_path, dataset, lr_left, lr_right, bs_left, bs_right, epoch_left, epoch_right, blur, rotate, flip, scale, dataset_already_split, user_slug)
+    final_res = conduct_experiment_cls(model_selection, timestamp_path, dataset, lr_left, lr_right, bs_left, bs_right, epoch_left, epoch_right, blur, rotate, flip, scale, dataset_already_split, user_slug, transfer_learning)
     print(f"Last condition for {model_selection}: {final_res}")
 
 
