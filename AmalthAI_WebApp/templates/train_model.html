@@ -75,11 +75,12 @@
                     <option value=" ">All the above</option>
                 </select>
 
+                <!-- Pretrained weights or not -->
                 {% if mode in ["classification", "detection"] %}
-                <label class="form-label">Transfer Learning</label>
+                <label class="form-label">Training Mode</label>
                 <select class="form-select mb-3" id="transferLearningSelect">
-                    <option value="true" selected>Enabled</option>
-                    <option value="false">Disabled</option>
+                    <option value="true" selected>Fine-tuning (Pre-trained Model)</option>
+                    <option value="false">Train from Scratch</option>
                 </select>
                 {% endif %}
 
