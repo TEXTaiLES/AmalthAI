@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+{% block title %}VLM Chat{% endblock %}
+{% block content %}
+<style>
+    @media (max-width: 576px) {
+        .class-prob-row {
+            flex-wrap: wrap;
+        }
+        .class-prob-row input {
+            flex: 1 1 45%;
+            min-width: 0;
+        }
+        .class-prob-row .remove-row {
+            flex: 0 0 auto;
+        }
+    }
+    .tooltip .tooltip-inner {
+        max-width: 260px;
+        text-align: left;
+    }
+</style>
+<div class="container mt-4" style="max-width: 1100px;">
+    <h2 class="mb-4">Vision-Language Assisted Inference</h2>
+
+    {% if answer %}
+    <div class="mb-3 text-center d-flex justify-content-center gap-2 flex-wrap">
+        {% for img in images_data %}
+        <img src="data:{{ img.mime_type }};base64,{{ img.image_b64 }}" alt="Analyzed image" class="img-thumbnail" style="max-height: 300px;">
+        {% endfor %}
+    </div>
+    <div class="card mb-4">
+        <div class="card-body">
+            <h6 class="card-subtitle mb-2 text-muted">Answer</h6>
+            <p class="card-text">{{ answer }}</p>
+        </div>
+    </div>
+
+    {% if filled_system_prompt %}
+    <div class="card mb-3">
+        <div class="card-body">
+            <h6 class="card-subtitle mb-2 text-muted">System prompt used</h6>
+            <pre class="small mb-0" style="white-space: pre-wrap;">{{ filled_system_prompt }}</pre>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if filled_user_prompt %}
+    <div class="card mb-4">
+        <div class="card-body">
+            <h6 class="card-subtitle mb-2 text-muted">User prompt used</h6>
+            <pre class="small mb-0" style="white-space: pre-wrap;">{{ filled_user_prompt }}</pre>
+        </div>
+    </div>
+    {% endif %}
+
+    <a href="{{ url_for('vlm_chat') }}" class="btn btn-outline-primary mb-4">
+        <i class="bi bi-arrow-repeat me-1"></i> Start New Session
+    </a>
+
+    {% else %}
+    <form method="POST" enctype="multipart/form-data" id="vlmForm">
+
+        <div class="row">
+            <div class="col-12 col-sm-6">
+                <div id="dropZone1" class="border border-2 border-dashed rounded p-3 text-center mb-3"
+                     style="cursor: pointer; transition: background-color 0.2s; border-color: #adb5bd; min-height: 180px;">
+                    <div id="dropZoneContent1">
+                        <i class="bi bi-cloud-arrow-up fs-1 text-secondary"></i>
+                        <p class="mb-1 mt-2 small">Image 1</p>
+                        <p class="text-muted small mb-0">click or drop</p>
+                    </div>
+                    <img id="imagePreview1" src="" alt="Preview 1" class="img-fluid rounded d-none" style="max-height: 160px;">
+                </div>
+                <input type="file" name="image1" id="imageInput1" accept="image/*" class="d-none" required>
+            </div>
+
+            <div class="col-12 col-sm-6">
+                <div id="dropZone2" class="border border-2 border-dashed rounded p-3 text-center mb-3"
+                     style="cursor: pointer; transition: background-color 0.2s; border-color: #adb5bd; min-height: 180px;">
+                    <div id="dropZoneContent2">
+                        <i class="bi bi-cloud-arrow-up fs-1 text-secondary"></i>
+                        <p class="mb-1 mt-2 small">Image 2</p>
+                        <p class="text-muted small mb-0">click or drop</p>
+                    </div>
+                    <img id="imagePreview2" src="" alt="Preview 2" class="img-fluid rounded d-none" style="max-height: 160px;">
+                </div>
+                <input type="file" name="image2" id="imageInput2" accept="image/*" class="d-none" required>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card mb-3">
+                    <div class="card-header py-2">
+                        <span class="small fw-semibold">User prompt fields</span>
+                        <span class="d-inline-block" data-bs-toggle="tooltip" data-bs-placement="right" title="The message sent to the model along with the images: task, ground truth, prediction, and probabilities. Any field left empty is simply omitted from the prompt.">
+                            <i class="bi bi-info-circle" style="cursor: help; font-size: 0.9rem; color: #6c757d;"></i>
+                        </span>
+                    </div>
+                    <div class="card-body py-2">
+                        {% set user_labels = {
+                            'task': 'Task',
+                            'ground_truth': 'Ground-truth class',
+                            'predicted_class': 'Predicted class',
+                            'confidence': 'Prediction confidence'
+                        } %}
+                        {% for key, example in user_fields %}
+                        <div class="mb-2">
+                            <label class="form-label small mb-1">{{ user_labels[key] }}</label>
+                            <input type="text" name="{{ key }}" class="form-control form-control-sm"
+                                   placeholder="{{ example }}">
+                        </div>
+                        {% endfor %}
+
+                        <label class="form-label small mb-1">Class probabilities</label>
+                        <div id="classProbRows">
+                            {% for name, value in class_examples %}
+                            <div class="input-group input-group-sm mb-1 class-prob-row">
+                                <input type="text" name="class_name" class="form-control" placeholder="{{ name }}">
+                                <input type="text" name="class_value" class="form-control" placeholder="{{ value }}">
+                                <button type="button" class="btn btn-outline-danger remove-row">&times;</button>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <button type="button" id="addClassRow" class="btn btn-sm btn-outline-secondary mt-1">+ Add class</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header py-2">
+                        <span class="small fw-semibold">System prompt fields</span>
+                        <span class="d-inline-block" data-bs-toggle="tooltip" data-bs-placement="right" title="Defines the model's role and rules (what it should/should not describe). Fill in the blanks to match your specific task.">
+                            <i class="bi bi-info-circle" style="cursor: help; font-size: 0.9rem; color: #6c757d;"></i>
+                        </span>
+                    </div>
+                    <div class="card-body py-2">
+                        {% set labels = {
+                            'blank1': 'Subject of the images',
+                            'blank2': 'What the images depict',
+                            'blank3': 'Description of Image 1 (raw)',
+                            'blank4': 'What the attention should overlap with',
+                            'blank5': 'Forbidden classes / techniques / materials to name',
+                            'blank6': 'Forbidden material / background descriptions',
+                            'blank7': 'Forbidden info the model must not use'
+                        } %}
+                        {% for key, example in blanks %}
+                        <div class="mb-2">
+                            <label class="form-label small mb-1">{{ labels[key] }}</label>
+                            <textarea name="{{ key }}" class="form-control form-control-sm" rows="2"
+                                      placeholder="{{ example }}"></textarea>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary w-100 mt-3 mb-4" id="submitBtn">
+            <span id="submitSpinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+            <span id="submitText">Analyze</span>
+        </button>
+    </form>
+
+    <script>
+    function setupDropZone(zoneId, contentId, inputId, previewId) {
+        const dropZone = document.getElementById(zoneId);
+        const dropZoneContent = document.getElementById(contentId);
+        const input = document.getElementById(inputId);
+        const preview = document.getElementById(previewId);
+
+        function showPreview(file) {
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(ev) {
+                preview.src = ev.target.result;
+                preview.classList.remove('d-none');
+                dropZoneContent.classList.add('d-none');
+            };
+            reader.readAsDataURL(file);
+        }
+
+        dropZone.addEventListener('click', () => input.click());
+        input.addEventListener('change', function(e) {
+            showPreview(e.target.files[0]);
+        });
+        dropZone.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            dropZone.style.backgroundColor = '#f1f3f5';
+        });
+        dropZone.addEventListener('dragleave', function() {
+            dropZone.style.backgroundColor = '';
+        });
+        dropZone.addEventListener('drop', function(e) {
+            e.preventDefault();
+            dropZone.style.backgroundColor = '';
+            const file = e.dataTransfer.files[0];
+            if (file) {
+                input.files = e.dataTransfer.files;
+                showPreview(file);
+            }
+        });
+    }
+
+    setupDropZone('dropZone1', 'dropZoneContent1', 'imageInput1', 'imagePreview1');
+    setupDropZone('dropZone2', 'dropZoneContent2', 'imageInput2', 'imagePreview2');
+
+    document.getElementById('addClassRow').addEventListener('click', function() {
+        const rows = document.getElementById('classProbRows');
+        const row = document.createElement('div');
+        row.className = 'input-group input-group-sm mb-1 class-prob-row';
+        row.innerHTML = `
+            <input type="text" name="class_name" class="form-control" placeholder="Class name">
+            <input type="text" name="class_value" class="form-control" placeholder="Probability">
+            <button type="button" class="btn btn-outline-danger remove-row">&times;</button>
+        `;
+        rows.appendChild(row);
+    });
+
+    document.getElementById('classProbRows').addEventListener('click', function(e) {
+        if (e.target.classList.contains('remove-row')) {
+            e.target.closest('.class-prob-row').remove();
+        }
+    });
+
+    document.getElementById('vlmForm').addEventListener('submit', function() {
+        document.getElementById('submitBtn').disabled = true;
+        document.getElementById('submitSpinner').classList.remove('d-none');
+        document.getElementById('submitText').textContent = 'Analyzing...';
+    });
+    </script>
+    {% endif %}
+</div>
+{% endblock %}

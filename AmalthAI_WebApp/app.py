@@ -14,6 +14,7 @@ import json
 import uuid
 import docker
 import requests
+import base64
 from urllib.parse import quote
 from datetime import datetime
 from utils.auth import init_auth
@@ -24,6 +25,8 @@ from utils import user_paths
 from utils.user_paths import safe_user_slug, user_root, get_current_user_slug, get_current_user_email, ensure_user_folders
 from utils import dataset_processing
 from utils.dataset_processing import process_dataset, _merged_datasets
+from utils.vlm_utils import build_user_prompt
+from utils.vlm_utils import SYSTEM_PROMPT_TEMPLATE, SYSTEM_PROMPT_BLANKS, USER_PROMPT_TEMPLATE, USER_PROMPT_FIELDS, USER_PROMPT_CLASS_EXAMPLES
 from utils import hestia_helpers
 from utils.hestia_helpers import _dataset_manifest, _persist_dataset_to_hestia, _push_trained_model_to_hestia, _hestia_models_for_template, _persist_inference_to_hestia
 from utils.load_config import load_config, chown_target
@@ -74,6 +77,9 @@ IMAGE_OD = config.get("images").get("detection")
 # HESTIA data-lake integration
 HESTIA_ENABLED = bool(config.get("hestia", {}).get("enabled"))
 hc.configure(base_url=config.get("hestia", {}).get("base_url"))
+
+# VLM integration
+VLM_URL = config.get("vlm", {}).get("base_url")
 
 # Per-mode constants used by the HESTIA hooks.
 HESTIA_METRIC = {
@@ -1114,6 +1120,75 @@ def inference():
         results      = results,
         metric_label = metric,
         color_table  = color_table,
+    )
+
+ 
+@app.route('/vlm-chat', methods=['GET', 'POST'])
+@login_required
+def vlm_chat():
+    answer = None
+    images_data = []
+    filled_system_prompt = None
+    filled_user_prompt = None
+    blanks_values = {key: request.form.get(key, '') if request.method == 'POST' else '' for key, _ in SYSTEM_PROMPT_BLANKS}
+ 
+    if request.method == 'POST':
+        image_files = [request.files.get('image1'), request.files.get('image2')]
+ 
+        if all(image_files):
+            content = []
+            for img in image_files:
+                mime_type = img.mimetype or "image/jpeg"
+                img_b64 = base64.b64encode(img.read()).decode('utf-8')
+                images_data.append({"mime_type": mime_type, "image_b64": img_b64})
+                content.append({
+                    "type": "image_url",
+                    "image_url": {"url": f"data:{mime_type};base64,{img_b64}"}
+                })
+ 
+            filled_system_prompt = SYSTEM_PROMPT_TEMPLATE.format(**blanks_values)
+            filled_user_prompt = build_user_prompt(request.form)
+            content.append({"type": "text", "text": filled_user_prompt})
+ 
+            payload = {
+                "model": "Qwen/Qwen2-VL-2B-Instruct",
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": filled_system_prompt
+                    },
+                    {
+                        "role": "user",
+                        "content": content
+                    }
+                ],
+                "max_tokens": 512
+            }
+ 
+            try:
+                resp = requests.post(VLM_URL, json=payload, timeout=120)
+                resp.raise_for_status()
+                data = resp.json()
+                if "choices" in data and data["choices"] and "message" in data["choices"][0]:
+                    answer = data["choices"][0]["message"]["content"]
+                else:
+                    flash(f"Unexpected VLM response: {data}", "error")
+            except requests.exceptions.ConnectionError:
+                flash("The analysis service is currently offline. Please contact an administrator to start it.", "error")
+            except requests.exceptions.RequestException as e:
+                flash(f"VLM request failed: {e}", "error")
+            except ValueError:
+                flash("VLM returned invalid JSON", "error")
+ 
+    return render_template(
+        'vlm_chat.html',
+        answer=answer,
+        images_data=images_data,
+        filled_system_prompt=filled_system_prompt,
+        filled_user_prompt=filled_user_prompt,
+        blanks=SYSTEM_PROMPT_BLANKS,
+        user_fields=USER_PROMPT_FIELDS,
+        class_examples=USER_PROMPT_CLASS_EXAMPLES
     )
 
 

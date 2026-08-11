@@ -13,6 +13,9 @@ flask:
 kubeflow:
   namespace: kubeflow
 
+vlm:
+  url: "VLM_URL" # replace with the actual URL of your VLM service
+
 directus:
   base_url: DIRECTUS_URL
   login_url: DIRECTUS_LOGIN_URL
