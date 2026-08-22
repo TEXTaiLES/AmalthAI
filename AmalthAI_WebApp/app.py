@@ -21,7 +21,6 @@ from datetime import datetime
 from utils.auth import init_auth
 from utils.models_page import write_results
 from utils.helpers import load_datasets, load_models_available, load_dataset_info, get_max_image_size, load_models, get_best_timestamp
-from utils.inference_helpers import _inference_handoff_path, _parse_classification_output
 from utils.job_status import _job_status_path, _mark_stale_if_dead, _write_job_status, _read_job_status, _run_training_job
 from utils import user_paths
 from utils.user_paths import safe_user_slug, user_root, get_current_user_slug, get_current_user_email, ensure_user_folders
@@ -30,6 +29,9 @@ from utils.dataset_processing import process_dataset, _merged_datasets
 from utils.vlm_utils import build_user_prompt
 from utils.vlm_utils import SYSTEM_PROMPT_TEMPLATE, SYSTEM_PROMPT_BLANKS, USER_PROMPT_TEMPLATE, USER_PROMPT_FIELDS, USER_PROMPT_CLASS_EXAMPLES
 from utils import hestia_helpers
+from utils import inference_helpers
+from utils.inference_helpers import _inference_handoff_path, _parse_classification_output
+from utils.inference_helpers import _collect_inference_runs, _inference_params, _load_segmentation_color_table, _resolve_inference_model, _store_vlm_handoff
 from utils.hestia_helpers import _dataset_manifest, _persist_dataset_to_hestia, _push_trained_model_to_hestia, _hestia_models_for_template, _persist_inference_to_hestia
 from utils.load_config import load_config, chown_target
 from utils import hestia_client as hc
@@ -99,6 +101,7 @@ HESTIA_DATASET_DIR = {
 
 dataset_processing.init(HESTIA_ENABLED, HESTIA_DATASET_DIR)
 hestia_helpers.init(HESTIA_METRIC)
+inference_helpers.init(HESTIA_ENABLED)
 
 auth_helpers = init_auth(
     app,
@@ -722,6 +725,68 @@ def active_train_jobs():
     return jsonify(active)
 
 
+@app.route('/inference/results', methods=['GET'])
+@login_required
+def inference_results():
+    raw_id = request.args.get("id")
+    mode = request.args.get("mode", default="segmentation", type=str)
+    if mode not in ("segmentation", "detection", "classification"):
+        return "Invalid mode", 400
+
+    user_slug = get_current_user_slug()
+    ensure_user_folders(user_slug)
+    mode_params = _inference_params(user_slug)[mode]
+    model, _, model_id = _resolve_inference_model(mode_params, raw_id)
+    if not model:
+        return "Model not found", 404
+
+    results_runs = _collect_inference_runs(user_slug, mode, model_id)
+    color_table = (
+        _load_segmentation_color_table(user_slug, model.get("trained_on"))
+        if mode == "segmentation" else []
+    )
+    return render_template(
+        "inference_results.html",
+        mode=mode,
+        model_id=model_id,
+        model=model,
+        metric_label=mode_params["metric"],
+        color_table=color_table,
+        has_inference_results=bool(results_runs),
+        results_runs=results_runs,
+    )
+
+
+@app.route('/inference/results/vlm', methods=['POST'])
+@login_required
+def inference_result_vlm():
+    """Create a VLM handoff for one saved classification result."""
+    model_id = request.form.get("model_id", "")
+    timestamp = request.form.get("timestamp", "")
+    filename = request.form.get("filename", "")
+    components = (model_id, timestamp, filename)
+    if any(not value or secure_filename(value) != value for value in components):
+        return "Invalid inference result", 400
+
+    base_name = os.path.splitext(filename)[0]
+    input_path = f"classification/inputs/{model_id}/{timestamp}/{filename}"
+    gradcam_path = f"classification/outputs/{model_id}/{timestamp}/{base_name}_gradcam.jpg"
+    output_path = f"classification/outputs/{model_id}/{timestamp}/{base_name}.txt"
+
+    user_slug = get_current_user_slug()
+    required_paths = (input_path, gradcam_path, output_path)
+    resolved_paths = [
+        _inference_handoff_path(user_slug, relative_path)
+        for relative_path in required_paths
+    ]
+    if not all(path and os.path.isfile(path) for path in resolved_paths):
+        flash("This saved result is incomplete and cannot start a VLM chat.", "warning")
+        return redirect(url_for("inference_results", id=model_id, mode="classification"))
+
+    handoff_id = _store_vlm_handoff(input_path, gradcam_path, output_path)
+    return redirect(url_for("vlm_chat", handoff_id=handoff_id))
+
+
 @app.route('/inference', methods=['GET', 'POST'])
 @login_required
 def inference():
@@ -734,53 +799,13 @@ def inference():
     user_slug = get_current_user_slug()
     ensure_user_folders(user_slug)
 
-    # Init params
-    params = {
-        "segmentation": {
-            "csv"   : os.path.join(user_root(user_slug), "models_db", "trained_models_db_segm.csv"),
-            "metric": "mIoU Score"
-        },
-        "detection": {
-            "csv"   : os.path.join(user_root(user_slug), "models_db", "trained_models_db_od.csv"),
-            "metric": "mAP 50-95 Score"
-        },
-        "classification": {
-            "csv"   : os.path.join(user_root(user_slug), "models_db", "trained_models_db_cls.csv"),
-            "metric": "Accuracy"
-        },
-    
-    }
+    params = _inference_params(user_slug)
     mode_params = params[mode]
-    metric      = mode_params["metric"]
+    metric = mode_params["metric"]
 
-    # Resolve the model: segmentation is HESTIA-backed (addressed by UUID);
-    # other modes use the 1-based CSV row index. CSV is also the fallback.
-    model = None
-    hestia_model = None
-    model_id = raw_id
-    if HESTIA_ENABLED:
-        hestia_model = hc.get_model(raw_id)
-        if hestia_model:
-            model = {
-                "name"      : hestia_model.get("name"),
-                "trained_on": hestia_model.get("trained_on"),
-                "score"     : hestia_model.get("score"),
-                "date"      : hestia_model.get("trained_date"),
-                "model_id"  : hestia_model.get("model_id"),
-            }
-            model_id = hestia_model.get("model_id")
-
-    if model is None:
-        try:
-            model_id = int(raw_id)
-        except (TypeError, ValueError):
-            return "Model not found", 404
-        with open(mode_params["csv"], newline='', encoding='utf-8') as csvfile:
-            reader = csv.DictReader(csvfile)
-            models = [row for row in reader]
-        model = next((m for i, m in enumerate(models, 1) if i == model_id), None)
-        if not model:
-            return "Model not found", 404
+    model, hestia_model, model_id = _resolve_inference_model(mode_params, raw_id)
+    if not model:
+        return "Model not found", 404
 
     error_msg   = None
     success_msg = None
@@ -1089,18 +1114,14 @@ def inference():
                     else:
                         print(f"WARNING: Output file not found for {filename}: {output_file_path}")
                     
-                    handoff_id = uuid.uuid4().hex
-                    handoffs = session.get("vlm_handoffs", {})
-                    handoffs[handoff_id] = {
-                        "input_path": f"classification/inputs/{model_id}/{timestamp}/{filename}",
-                        "gradcam_path": (
+                    handoff_id = _store_vlm_handoff(
+                        f"classification/inputs/{model_id}/{timestamp}/{filename}",
+                        (
                             f"classification/outputs/{model_id}/{timestamp}/{gradcam_filename}"
                             if gradcam_file else None
                         ),
-                        "output_path": f"classification/outputs/{model_id}/{timestamp}/{expected_output}",
-                    }
-                    session["vlm_handoffs"] = handoffs
-                    session.modified = True
+                        f"classification/outputs/{model_id}/{timestamp}/{expected_output}",
+                    )
 
                     results.append({
                         'input_file' : input_file,
@@ -1127,7 +1148,9 @@ def inference():
         flash(success_msg, "info")
     if error_msg:
         flash(error_msg, "danger")
-    
+
+    has_inference_results = bool(_collect_inference_runs(user_slug, mode, model_id))
+
     return render_template(
         'inference.html',
         mode         = mode,
@@ -1136,6 +1159,7 @@ def inference():
         results      = results,
         metric_label = metric,
         color_table  = color_table,
+        has_inference_results = has_inference_results,
     )
 
  

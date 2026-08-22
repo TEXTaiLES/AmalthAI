@@ -34,6 +34,14 @@
                             </tbody>
                         </table>
                         <hr>
+                        <div class="mb-3">
+                            {% if has_inference_results %}
+                            <a class="inference-results-status available" href="{{ url_for('inference_results', id=model_id, mode=mode) }}">Inference Results Available</a>
+                            {% else %}
+                            <span class="inference-results-status unavailable" aria-disabled="true">Inference Results Not Available</span>
+                            {% endif %}
+                        </div>
+                        <hr>
                         <div class="d-flex flex-column gap-3 mt-4">
                             <button type="button" id="upload-btn" class="btn btn-outline-primary bg-white btn-lg w-100">Upload Images</button>
                             <!-- <button type="button" class="btn btn-outline-secondary btn-lg w-100">Select from Database</button> -->
@@ -211,8 +219,18 @@
                         {% endif %}
                     </table>
                 </div>
+                {% else %}
+                <div class="p-4 rounded shadow-sm bg-light mt-sm-0 mt-4">
+                    <h5 class="mb-2">Live Inference</h5>
+                    <p class="text-muted mb-0">
+                        Upload images and run inference from this page.
+                        {% if has_inference_results %}
+                        Past runs are available on the <a href="{{ url_for('inference_results', id=model_id, mode=mode) }}">inference results page</a>.
+                        {% endif %}
+                    </p>
+                </div>
+                {% endif %}
             </div>
-            {% endif %}
         </div>
     </div>
 </div>
