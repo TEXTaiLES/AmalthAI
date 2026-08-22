@@ -165,6 +165,13 @@
                                                 {% endif %}
                                             {% endif %}
                                         {% endfor %}
+                                        {% if result.get('gradcam_file') and result.get('vlm_handoff_id') %}
+                                        <div class="mt-3 text-center">
+                                            <a href="{{ url_for('vlm_chat', handoff_id=result.get('vlm_handoff_id')) }}" class="btn btn-primary">
+                                                <i class="bi bi-chat-dots me-1"></i> Start a VLM-Assisted Inference
+                                            </a>
+                                        </div>
+                                        {% endif %}
                                     </div>
                                 </td>
                             </tr>

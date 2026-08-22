@@ -15,11 +15,13 @@ import uuid
 import docker
 import requests
 import base64
+import mimetypes
 from urllib.parse import quote
 from datetime import datetime
 from utils.auth import init_auth
 from utils.models_page import write_results
 from utils.helpers import load_datasets, load_models_available, load_dataset_info, get_max_image_size, load_models, get_best_timestamp
+from utils.inference_helpers import _inference_handoff_path, _parse_classification_output
 from utils.job_status import _job_status_path, _mark_stale_if_dead, _write_job_status, _read_job_status, _run_training_job
 from utils import user_paths
 from utils.user_paths import safe_user_slug, user_root, get_current_user_slug, get_current_user_email, ensure_user_folders
@@ -1087,11 +1089,25 @@ def inference():
                     else:
                         print(f"WARNING: Output file not found for {filename}: {output_file_path}")
                     
+                    handoff_id = uuid.uuid4().hex
+                    handoffs = session.get("vlm_handoffs", {})
+                    handoffs[handoff_id] = {
+                        "input_path": f"classification/inputs/{model_id}/{timestamp}/{filename}",
+                        "gradcam_path": (
+                            f"classification/outputs/{model_id}/{timestamp}/{gradcam_filename}"
+                            if gradcam_file else None
+                        ),
+                        "output_path": f"classification/outputs/{model_id}/{timestamp}/{expected_output}",
+                    }
+                    session["vlm_handoffs"] = handoffs
+                    session.modified = True
+
                     results.append({
                         'input_file' : input_file,
                         'output_text': output_text,
                         'gradcam_file': gradcam_file,
-                        'filename'   : filename
+                        'filename'   : filename,
+                        'vlm_handoff_id': handoff_id,
                     })
 
                 # HESTIA: persist inference inputs + outputs (non-fatal).
@@ -1130,16 +1146,66 @@ def vlm_chat():
     images_data = []
     filled_system_prompt = None
     filled_user_prompt = None
-    blanks_values = {key: request.form.get(key, '') if request.method == 'POST' else '' for key, _ in SYSTEM_PROMPT_BLANKS}
- 
+    user_slug = get_current_user_slug()
+    handoff_id = request.values.get("handoff_id", "")
+    handoff = session.get("vlm_handoffs", {}).get(handoff_id)
+    prefill = {key: "" for key, _ in USER_PROMPT_FIELDS}
+    class_probabilities = []
+    handoff_images = []
+
+    if handoff:
+        output_path = _inference_handoff_path(user_slug, handoff.get("output_path", ""))
+        if output_path and os.path.isfile(output_path):
+            with open(output_path, "r", encoding="utf-8") as output_file:
+                classification = _parse_classification_output(output_file.read())
+            prefill["predicted_class"] = classification["predicted_class"]
+            prefill["confidence"] = classification["confidence"]
+            class_probabilities = classification["probabilities"]
+
+        for key in ("input_path", "gradcam_path"):
+            relative_path = handoff.get(key)
+            image_path = _inference_handoff_path(user_slug, relative_path) if relative_path else None
+            if image_path and os.path.isfile(image_path):
+                handoff_images.append(url_for("user_inference_files", filename=relative_path))
+            else:
+                handoff_images.append(None)
+
+        if not all(handoff_images):
+            flash("The saved image or Grad-CAM is no longer available. Please upload both images manually.", "warning")
+            handoff = None
+            handoff_images = []
+
+    blanks_values = {
+        key: request.form.get(key, "") if request.method == "POST" else ""
+        for key, _ in SYSTEM_PROMPT_BLANKS
+    }
+
     if request.method == 'POST':
-        image_files = [request.files.get('image1'), request.files.get('image2')]
- 
-        if all(image_files):
+        image_sources = []
+        uploaded_images = [request.files.get('image1'), request.files.get('image2')]
+        handoff_paths = [
+            handoff.get("input_path") if handoff else None,
+            handoff.get("gradcam_path") if handoff else None,
+        ]
+
+        for uploaded_image, relative_path in zip(uploaded_images, handoff_paths):
+            if uploaded_image and uploaded_image.filename:
+                mime_type = uploaded_image.mimetype or "image/jpeg"
+                image_sources.append((mime_type, uploaded_image.read()))
+                continue
+
+            image_path = _inference_handoff_path(user_slug, relative_path) if relative_path else None
+            if image_path and os.path.isfile(image_path):
+                mime_type = mimetypes.guess_type(image_path)[0] or "image/jpeg"
+                with open(image_path, "rb") as image_file:
+                    image_sources.append((mime_type, image_file.read()))
+
+        if len(image_sources) != 2:
+            flash("Please provide both the original image and its Grad-CAM visualization.", "error")
+        else:
             content = []
-            for img in image_files:
-                mime_type = img.mimetype or "image/jpeg"
-                img_b64 = base64.b64encode(img.read()).decode('utf-8')
+            for mime_type, image_bytes in image_sources:
+                img_b64 = base64.b64encode(image_bytes).decode('utf-8')
                 images_data.append({"mime_type": mime_type, "image_b64": img_b64})
                 content.append({
                     "type": "image_url",
@@ -1188,7 +1254,11 @@ def vlm_chat():
         filled_user_prompt=filled_user_prompt,
         blanks=SYSTEM_PROMPT_BLANKS,
         user_fields=USER_PROMPT_FIELDS,
-        class_examples=USER_PROMPT_CLASS_EXAMPLES
+        class_examples=USER_PROMPT_CLASS_EXAMPLES,
+        handoff_id=handoff_id if handoff else "",
+        handoff_images=handoff_images,
+        prefill=prefill,
+        class_probabilities=class_probabilities,
     )
 
 

@@ -59,32 +59,36 @@
 
     {% else %}
     <form method="POST" enctype="multipart/form-data" id="vlmForm">
+        {% if handoff_id %}<input type="hidden" name="handoff_id" value="{{ handoff_id }}">{% endif %}
+        {% if handoff_images %}
+        <div class="alert alert-info py-2 small">The original image, Grad-CAM, predicted class, and class probabilities were loaded from the classification result. You can replace either image if needed.</div>
+        {% endif %}
 
         <div class="row">
             <div class="col-12 col-sm-6">
                 <div id="dropZone1" class="border border-2 border-dashed rounded p-3 text-center mb-3"
                      style="cursor: pointer; transition: background-color 0.2s; border-color: #adb5bd; min-height: 180px;">
-                    <div id="dropZoneContent1">
+                    <div id="dropZoneContent1"{% if handoff_images %} class="d-none"{% endif %}>
                         <i class="bi bi-cloud-arrow-up fs-1 text-secondary"></i>
                         <p class="mb-1 mt-2 small">Image 1</p>
                         <p class="text-muted small mb-0">click or drop</p>
                     </div>
-                    <img id="imagePreview1" src="" alt="Preview 1" class="img-fluid rounded d-none" style="max-height: 160px;">
+                    <img id="imagePreview1" src="{{ handoff_images[0] if handoff_images else '' }}" alt="Preview 1" class="img-fluid rounded{% if not handoff_images %} d-none{% endif %}" style="max-height: 160px;">
                 </div>
-                <input type="file" name="image1" id="imageInput1" accept="image/*" class="d-none" required>
+                <input type="file" name="image1" id="imageInput1" accept="image/*" class="d-none"{% if not handoff_images %} required{% endif %}>
             </div>
 
             <div class="col-12 col-sm-6">
                 <div id="dropZone2" class="border border-2 border-dashed rounded p-3 text-center mb-3"
                      style="cursor: pointer; transition: background-color 0.2s; border-color: #adb5bd; min-height: 180px;">
-                    <div id="dropZoneContent2">
+                    <div id="dropZoneContent2"{% if handoff_images %} class="d-none"{% endif %}>
                         <i class="bi bi-cloud-arrow-up fs-1 text-secondary"></i>
                         <p class="mb-1 mt-2 small">Image 2</p>
                         <p class="text-muted small mb-0">click or drop</p>
                     </div>
-                    <img id="imagePreview2" src="" alt="Preview 2" class="img-fluid rounded d-none" style="max-height: 160px;">
+                    <img id="imagePreview2" src="{{ handoff_images[1] if handoff_images else '' }}" alt="Preview 2" class="img-fluid rounded{% if not handoff_images %} d-none{% endif %}" style="max-height: 160px;">
                 </div>
-                <input type="file" name="image2" id="imageInput2" accept="image/*" class="d-none" required>
+                <input type="file" name="image2" id="imageInput2" accept="image/*" class="d-none"{% if not handoff_images %} required{% endif %}>
             </div>
         </div>
 
@@ -108,16 +112,19 @@
                         <div class="mb-2">
                             <label class="form-label small mb-1">{{ user_labels[key] }}</label>
                             <input type="text" name="{{ key }}" class="form-control form-control-sm"
-                                   placeholder="{{ example }}">
+                                   value="{{ prefill.get(key, '') }}" placeholder="{{ example }}">
                         </div>
                         {% endfor %}
 
                         <label class="form-label small mb-1">Class probabilities</label>
                         <div id="classProbRows">
-                            {% for name, value in class_examples %}
+                            {% set probability_rows = class_probabilities if class_probabilities else class_examples %}
+                            {% for probability in probability_rows %}
+                            {% set name = probability.name if class_probabilities else probability[0] %}
+                            {% set value = probability.value if class_probabilities else probability[1] %}
                             <div class="input-group input-group-sm mb-1 class-prob-row">
-                                <input type="text" name="class_name" class="form-control" placeholder="{{ name }}">
-                                <input type="text" name="class_value" class="form-control" placeholder="{{ value }}">
+                                <input type="text" name="class_name" class="form-control" value="{{ name if class_probabilities else '' }}" placeholder="{{ name }}">
+                                <input type="text" name="class_value" class="form-control" value="{{ value if class_probabilities else '' }}" placeholder="{{ value }}">
                                 <button type="button" class="btn btn-outline-danger remove-row">&times;</button>
                             </div>
                             {% endfor %}
