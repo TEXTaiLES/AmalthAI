@@ -311,11 +311,12 @@ def upload_dataset_zip():
 def dataset_submit():
     mode = request.form.get('mode')
 
-    num_classes = request.form.get('num_classes')
-    try:
-        num_classes = int(num_classes)
-    except (TypeError, ValueError):
-        return redirect(url_for("collections", mode=mode, msg="Invalid number of classes", msg_type="danger"))
+    num_classes = None
+    if mode == "classification":
+        try:
+            num_classes = int(request.form.get('num_classes'))
+        except (TypeError, ValueError):
+            return redirect(url_for("collections", mode=mode, msg="Invalid number of classes", msg_type="danger"))
         
     filename = secure_filename(request.form.get('dataset_zip', ''))
 
