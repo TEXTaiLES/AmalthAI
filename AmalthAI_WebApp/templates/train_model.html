@@ -12,7 +12,7 @@
     <input type="hidden" id="mode" value="{{ mode }}">
 
     <!-- Header -->
-    {% set header_text="Train a " ~ mode|capitalize ~ " model" %}
+    {% set header_text="Train a " ~ mode.replace("_", " ")|title ~ " model" %}
     {% include 'partials/mode_header.html' %}
     
     <!-- Body -->
@@ -20,7 +20,9 @@
         <!-- Left content -->
         <div class="col-lg-8 d-flex flex-column justify-content-start">
             <p class="mb-4">
-                {% if mode == "classification" %}
+                {% if mode == "multispectral_classification" %}
+                    This task assigns a category using all bands in each multiband TIFF and returns per-class probabilities.
+                {% elif mode == "classification" %}
                     This task assigns a category label to the entire image from a predefined set of classes. It is ideal when the goal is to identify the primary object, scene, or concept present in an image.
                 {% elif mode == "segmentation" %}
                     This task predicts a pixel-level mask for each region of interest in the image. It is ideal when precise object boundaries and detailed spatial understanding are required.
@@ -50,7 +52,7 @@
                             {% for model in models %}
                             <tr>
                                 <td><a href="{{model.url}}" target="_blank">{{ model.name }}</a></td>
-                                <td>2D Images</td>
+                                <td>{% if mode == "multispectral_classification" %}Multiband TIFF{% else %}2D Images{% endif %}</td>
                                 <td>
                                     <span class="d-inline-block" data-bs-toggle="tooltip" data-bs-placement="left" title="{{ model.description }}">
                                         <i class="bi bi-info-circle" style="cursor: help; font-size: 0.9rem; color: #6c757d;"></i>
@@ -76,7 +78,7 @@
                 </select>
 
                 <!-- Pretrained weights or not -->
-                {% if mode in ["classification", "detection"] %}
+                {% if mode in ["classification", "multispectral_classification", "detection"] %}
                 <label class="form-label">Training Mode</label>
                 <select class="form-select mb-3" id="transferLearningSelect">
                     <option value="true" selected>Fine-tuning (Pre-trained Model)</option>

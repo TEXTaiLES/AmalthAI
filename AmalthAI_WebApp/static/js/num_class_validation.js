@@ -2,6 +2,8 @@ document.addEventListener("DOMContentLoaded", () => {
     // Elements
     const input     = document.getElementById("numClassesInput");
     const error     = document.getElementById("num_classes_error");
+    const channelInput = document.getElementById("numChannelsInput");
+    const channelError = document.getElementById("num_channels_error");
     const submitBtn = document.getElementById("submitBtn");
     const zipInput  = document.getElementById("datasetZipInput");
     const loader    = document.getElementById("zipUploadLoader");
@@ -9,7 +11,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // State flags
     const hasNumClasses = !!input;
-    let numClassesValid = !hasNumClasses; 
+    let numClassesValid = !hasNumClasses;
+    let channelsValid = !channelInput;
     let uploadComplete   = false;
     let uploadInProgress = false;
 
@@ -46,10 +49,20 @@ document.addEventListener("DOMContentLoaded", () => {
         return valid;
     }
 
+    function validateChannels() {
+        if (!channelInput) return true;
+        const value = Number(channelInput.value);
+        channelsValid = Number.isInteger(value) && value >= Number(channelInput.min) && value <= Number(channelInput.max);
+        channelInput.classList.toggle("is-invalid", !channelsValid);
+        channelError.classList.toggle("d-none", channelsValid);
+        setSubmitState();
+        return channelsValid;
+    }
+
     // Enable/disable submit based on combined conditions
     function setSubmitState() {
         // Submit enabled only when classes valid, upload finished successfully, and not currently uploading
-        submitBtn.disabled = !(numClassesValid && uploadComplete && !uploadInProgress);
+        submitBtn.disabled = !(numClassesValid && channelsValid && uploadComplete && !uploadInProgress);
     }
 
     // Handle async zip upload
@@ -113,11 +126,16 @@ document.addEventListener("DOMContentLoaded", () => {
         input.addEventListener("input", validateNumClasses);
         input.addEventListener("change", validateNumClasses);
     }
+    if (channelInput) {
+        channelInput.addEventListener("input", validateChannels);
+        channelInput.addEventListener("change", validateChannels);
+    }
     if (zipInput) {
         zipInput.addEventListener('change', handleZipSelection);
     }
 
     // Initial validation
     validateNumClasses();
+    validateChannels();
     setSubmitState();
 });

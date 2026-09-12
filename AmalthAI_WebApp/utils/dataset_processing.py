@@ -1,4 +1,7 @@
 import os
+import json
+
+import tifffile
 import shutil
 from datetime import datetime
 
@@ -34,7 +37,7 @@ def _merged_datasets(user_slug, mode, mode_short):
         except Exception:
             date = ""
         out[d["name"]] = {"id": d["name"], "name": d["name"],
-                          "num_samples": d["num_samples"], "type": "2D images",
+                          "num_samples": d["num_samples"], "type": ("Multiband TIFF" if mode == "multispectral_classification" else "2D images"),
                           "date": date, "cached": True}
 
     if HESTIA_ENABLED:
@@ -53,12 +56,12 @@ def _merged_datasets(user_slug, mode, mode_short):
                     except Exception:
                         date = ""
                 out[name] = {"id": name, "name": name, "num_samples": num,
-                             "type": "2D images", "date": date, "cached": False}
+                             "type": ("Multiband TIFF" if mode == "multispectral_classification" else "2D images"), "date": date, "cached": False}
 
     return sorted(out.values(), key=lambda d: str(d["name"]).lower())
 
 
-def process_dataset(mode, zip_path, num_classes=None, user_slug=None):
+def process_dataset(mode, zip_path, num_classes=None, user_slug=None, num_channels=None, band_names=None):
     if user_slug is None:
         user_slug = get_current_user_slug()
 
@@ -66,7 +69,8 @@ def process_dataset(mode, zip_path, num_classes=None, user_slug=None):
     DEST_PATHS = {
         "segmentation"  : f"{user_datasets_root}/Segmentation",
         "detection"     : f"{user_datasets_root}/Object-Detection",
-        "classification": f"{user_datasets_root}/Classification"
+        "classification": f"{user_datasets_root}/Classification",
+        "multispectral_classification": f"{user_datasets_root}/Multispectral-Classification"
     }
 
     # unzip to a temp folder
@@ -164,8 +168,9 @@ def process_dataset(mode, zip_path, num_classes=None, user_slug=None):
             missing_images = lbl_set - img_set
             return False, f"Val mismatch. Images missing labels: {missing_labels}, labels missing images: {missing_images}", None
 
-    elif mode == "classification":
+    elif mode in ("classification", "multispectral_classification"):
         def validate_class_dir(root_dir, split_label):
+            multispectral = mode == "multispectral_classification"
             if not os.path.isdir(root_dir):
                 return False, f"Missing '{split_label}' folder"
 
@@ -181,6 +186,11 @@ def process_dataset(mode, zip_path, num_classes=None, user_slug=None):
                 cls_path = os.path.join(root_dir, cls)
                 contents = os.listdir(cls_path)
 
+                if multispectral:
+                    invalid = [name for name in contents if os.path.splitext(name)[1].lower() not in (".tif", ".tiff")]
+                    if invalid:
+                        return False, f"Class '{cls}' in '{split_label}' contains non-TIFF files: {invalid[:3]}"
+
                 # Must NOT be empty
                 if len(contents) == 0:
                     return False, f"Class '{cls}' in '{split_label}' is empty"
@@ -192,6 +202,15 @@ def process_dataset(mode, zip_path, num_classes=None, user_slug=None):
                             f"Class '{cls}' in '{split_label}' contains a folder ('{item}') "
                             "but only image files are allowed"
                         )
+
+                    if multispectral:
+                        try:
+                            array = tifffile.imread(os.path.join(cls_path, item))
+                        except Exception as exc:
+                            return False, f"Cannot read TIFF '{item}': {exc}"
+                        valid_shape = (array.ndim == 2 and int(num_channels) == 1) or (array.ndim == 3 and (array.shape[0] == int(num_channels) or array.shape[-1] == int(num_channels)))
+                        if not valid_shape:
+                            return False, f"TIFF '{item}' has shape {array.shape}; expected {num_channels} channels"
 
             return True, set(subdirs)
 
@@ -242,8 +261,26 @@ def process_dataset(mode, zip_path, num_classes=None, user_slug=None):
                         shutil.rmtree(tmp_dir, ignore_errors=True)
                         return False, f"Class '{cls}' contains a folder ('{item}') but only image files are allowed", None
 
+                    if mode == "multispectral_classification":
+                        if os.path.splitext(item)[1].lower() not in (".tif", ".tiff"):
+                            shutil.rmtree(tmp_dir, ignore_errors=True)
+                            return False, f"Class '{cls}' contains non-TIFF file '{item}'", None
+                        try:
+                            array = tifffile.imread(os.path.join(cls_path, item))
+                        except Exception as exc:
+                            shutil.rmtree(tmp_dir, ignore_errors=True)
+                            return False, f"Cannot read TIFF '{item}': {exc}", None
+                        valid_shape = (array.ndim == 2 and int(num_channels) == 1) or (array.ndim == 3 and (array.shape[0] == int(num_channels) or array.shape[-1] == int(num_channels)))
+                        if not valid_shape:
+                            shutil.rmtree(tmp_dir, ignore_errors=True)
+                            return False, f"TIFF '{item}' has shape {array.shape}; expected {num_channels} channels", None
+
     else:
         return False, "Unknown mode", None
+
+    if mode == "multispectral_classification":
+        with open(os.path.join(tmp_dir, "multispectral_metadata.json"), "w", encoding="utf-8") as handle:
+            json.dump({"schema_version": 1, "num_channels": int(num_channels), "band_names": band_names}, handle, indent=2)
 
     # Move to the Datasets Folder
     final_root = DEST_PATHS[mode]

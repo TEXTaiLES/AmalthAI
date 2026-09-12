@@ -46,7 +46,21 @@
                 <div class="table-responsive mb-4">
 
                     <table class="table table-striped">
-                        {% if mode == 'classification' %}
+                        {% if mode == 'multispectral_classification' %}
+                        <thead>
+                            <tr><th>Name</th><th>Class</th><th>Split</th><th>File</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for item in dataset_items %}
+                            <tr>
+                                <td>{{ item.get('display_name', item.get('name', 'file')) }}</td>
+                                <td>{{ item.get('class') }}</td>
+                                <td>{{ item.get('split', '-') }}</td>
+                                <td><a href="{{ item.get('image_url', item.get('image')) }}" download class="btn btn-outline-primary btn-sm">Download TIFF</a></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        {% elif mode == 'classification' %}
                         <thead>
                             <tr>
                                 <th>Name</th>

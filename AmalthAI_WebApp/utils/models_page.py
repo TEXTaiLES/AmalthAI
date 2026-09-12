@@ -34,6 +34,11 @@ def write_results(base_path, db_loc, mode, user_slug=None):
             new_path_weights = data_prefix + "/Classification" + weights_path.split("/Classification", 1)[1]
             new_path_config = data_prefix + "/Classification" + config_path .split("/Classification", 1)[1]
             col_5 =  round(float(last_row[4]), 2)
+        elif mode == "MsCls":
+            data_prefix = f"/data/{user_slug}" if user_slug else "/data"
+            new_path_weights = data_prefix + "/MultispectralClassification" + weights_path.split("/MultispectralClassification", 1)[1]
+            new_path_config = data_prefix + "/MultispectralClassification" + config_path.split("/MultispectralClassification", 1)[1]
+            col_5 = round(float(last_row[4]), 2)
 
         new_row = [col_3, col_1, col_5, today,new_path_weights,new_path_config]
 

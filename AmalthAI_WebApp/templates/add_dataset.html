@@ -4,7 +4,7 @@
 
 <div class="container my-5">
     <!-- Header -->
-    {% set header_text= "Add new " ~ mode ~ " dataset" %}
+    {% set header_text= "Add new " ~ mode.replace("_", " ")|title ~ " dataset" %}
     {% include 'partials/mode_header.html' %}
     
     <p class="mb-4">Upload your zipped dataset following the dataset structure guidelines.</p>
@@ -22,7 +22,9 @@
             <!-- Left content -->
             <div class="col-lg-8 d-flex flex-column justify-content-start">
                 <p class="mb-4">
-                    {% if mode == "classification" %}
+                    {% if mode == "multispectral_classification" %}
+                        Each sample must be one multiband TIFF with the same ordered bands.
+                    {% elif mode == "classification" %}
                     {% elif mode == "segmentation" %}
                     {% elif mode == "detection" %}
                     {% endif %}
@@ -59,7 +61,7 @@
             <!-- Right content -->
             <input type="hidden" id="mode" name="mode" value="{{ mode }}">
             <div class="col-lg-4">
-                {% if mode == "classification" %} 
+                {% if mode in ["classification", "multispectral_classification"] %}
                 <div class="card shadow-sm overflow-hidden border mb-3">
                     <div class="card-header bg-light">
                         <h6 class="mb-0"><i class="bi bi-tags me-2"></i>Number of Classes</h6>
@@ -89,6 +91,19 @@
                         </div>
                     </div>
                 </div>
+                {% if mode == "multispectral_classification" %}
+                <div class="card shadow-sm overflow-hidden border mb-3">
+                    <div class="card-header bg-light"><h6 class="mb-0">Spectral Input</h6></div>
+                    <div class="card-body">
+                        <label class="form-label" for="numChannelsInput">Number of channels</label>
+                        <input type="number" class="form-control mb-3" id="numChannelsInput" name="num_channels" min="1" max="64" step="1" value="4">
+                        <div class="invalid-feedback d-none mb-2" id="num_channels_error">Invalid number of channels</div>
+                        <label class="form-label" for="bandNamesInput">Band names in TIFF order</label>
+                        <input type="text" class="form-control" id="bandNamesInput" name="band_names" placeholder="Blue, Green, Red, NIR">
+                        <div class="form-text">Optional. Leave blank to use Band 1, Band 2, and so on.</div>
+                    </div>
+                </div>
+                {% endif %}
                 {% endif %}
 
                 <div class="card shadow-sm overflow-hidden border">
@@ -98,7 +113,21 @@
                     <div class="card-body">
                         <p class="small text-muted mb-3">The uploaded .zip file must follow this exact directory structure:</p>
                         
-                        {% if mode == "classification" %}
+                        {% if mode == "multispectral_classification" %}
+                        <pre class="bg-light p-3 rounded small" style="font-size: 0.8rem; overflow-x: auto;"><code>DatasetName/
+├── train/
+│   ├── class_1/
+│   │   ├── sample_001.tif
+│   │   └── ...
+│   └── class_2/
+│       └── ...
+└── val/
+    ├── class_1/
+    │   └── sample_101.tif
+    └── class_2/
+        └── ...</code></pre>
+                        <p class="small text-muted mt-2 mb-0">Each TIFF must contain exactly the selected channels in the stated order. A flat class-folder structure is also supported with an automatic 70/30 split.</p>
+                        {% elif mode == "classification" %}
                         <pre class="bg-light p-3 rounded small" style="font-size: 0.8rem; overflow-x: auto;"><code>DatasetName/
 ├── train/
 │   ├── class_1/
@@ -159,7 +188,7 @@
                     <div class="card-body">
                         <p class="small text-muted mb-0">
                             For more detailed information regarding dataset preparation and annotation, please refer to our 
-                            <a href="{% if mode == 'classification' %}https://textailes.github.io/AmalthAI-documentation/manual/classification/{% elif mode == 'segmentation' %}https://textailes.github.io/AmalthAI-documentation/manual/semantic_segm/{% elif mode == 'detection' %}https://textailes.github.io/AmalthAI-documentation/manual/object_detection/{% endif %}" target="_blank" class="text-decoration-none">official documentation</a>.
+                            <a href="{% if mode in ['classification', 'multispectral_classification'] %}https://textailes.github.io/AmalthAI-documentation/manual/classification/{% elif mode == 'segmentation' %}https://textailes.github.io/AmalthAI-documentation/manual/semantic_segm/{% elif mode == 'detection' %}https://textailes.github.io/AmalthAI-documentation/manual/object_detection/{% endif %}" target="_blank" class="text-decoration-none">official documentation</a>.
                         </p>
                     </div>
                 </div>

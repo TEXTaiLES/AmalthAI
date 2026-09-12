@@ -1,5 +1,6 @@
 import os
 import csv
+import json
 from werkzeug.utils import secure_filename
 
 from utils import hestia_client as hc
@@ -32,13 +33,18 @@ def _dataset_manifest(mode, final_path, num_classes):
     elif mode == "detection":
         manifest["counts"] = {"train_images": _count("train", "images"),
                               "valid_images": _count("valid", "images")}
-    elif mode == "classification":
+    elif mode in ("classification", "multispectral_classification"):
         train_dir = os.path.join(final_path, "train")
         root = train_dir if os.path.isdir(train_dir) else final_path
         classes = ([d for d in os.listdir(root)
                     if os.path.isdir(os.path.join(root, d))]
                    if os.path.isdir(root) else [])
         manifest["classes"] = sorted(classes)
+        if mode == "multispectral_classification":
+            metadata_path = os.path.join(final_path, "multispectral_metadata.json")
+            if os.path.isfile(metadata_path):
+                with open(metadata_path, "r", encoding="utf-8") as handle:
+                    manifest["spectral"] = json.load(handle)
     return manifest
 
 
@@ -77,6 +83,14 @@ def _push_trained_model_to_hestia(user_slug, mode, mode_paths, experiment_id,
     except (TypeError, ValueError):
         score = None
 
+    model_extra = None
+    if mode == "multispectral_classification" and row.get("config_path") and os.path.isfile(row["config_path"]):
+        try:
+            with open(row["config_path"], "r", encoding="utf-8") as handle:
+                model_extra = {"spectral": json.load(handle)}
+        except (OSError, ValueError):
+            model_extra = None
+
     model_id = hc.push_model(
         owner_slug=user_slug,
         mode=mode,
@@ -90,6 +104,7 @@ def _push_trained_model_to_hestia(user_slug, mode, mode_paths, experiment_id,
         score=score,
         metric_name=HESTIA_METRIC.get(mode),
         trained_date=row.get("date"),
+        extra=model_extra,
     )
     if experiment_id:
         hc.update_experiment(

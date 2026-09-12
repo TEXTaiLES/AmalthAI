@@ -326,7 +326,14 @@ def conduct_experiment_od(model_selection, timestamp_path, dataset, lr_left, lr_
     # Return the last status type
     return last_status_type
 
-def conduct_experiment_cls(model_selection, timestamp_path, dataset, lr_left, lr_right, bs_left, bs_right, epochs_left, epochs_right, blur, rotate, flip, scale, dataset_already_split, user_slug, transfer_learning):
+def conduct_experiment_cls(model_selection, timestamp_path, dataset, lr_left, lr_right, bs_left, bs_right, epochs_left, epochs_right, blur, rotate, flip, scale, dataset_already_split, user_slug, transfer_learning, in_channels=None):
+    multispectral = in_channels is not None
+    backend_mount = "/multispectral_classification" if multispectral else "/classification"
+    dataset_mount = "/multispectral_datasets" if multispectral else "/class_datasets"
+    save_mount = "/multispectral_classsave" if multispectral else "/classsave"
+    backend_host = "/host/MultispectralClassification" if multispectral else "/host/Classification"
+    dataset_host = (f"/host/{user_slug}/Datasets/Multispectral-Classification" if multispectral else f"/host/{user_slug}/Datasets/Classification")
+    save_host = (f"/host/{user_slug}/MultispectralClassification" if multispectral else f"/host/{user_slug}/Classification")
     basic_classification_katib_experiment = {
         "apiVersion": "kubeflow.org/v1beta1",
         "kind": "Experiment",
@@ -390,7 +397,7 @@ def conduct_experiment_cls(model_selection, timestamp_path, dataset, lr_left, lr
                                         "command": [
                                             "python",
                                             "-u",
-                                            "/classification/train.py",
+                                            f"{backend_mount}/train.py",
                                             "--dataset", dataset,
                                             "--model", model_selection,
                                             "--epochs", "${trialParameters.numEpochs}",
@@ -406,9 +413,9 @@ def conduct_experiment_cls(model_selection, timestamp_path, dataset, lr_left, lr
                                         ],
                                         "volumeMounts": [
                                             {"mountPath": "/dev/shm", "name": "shm"},
-                                            {"mountPath": "/classification", "name": "classification"},
-                                            {"mountPath": "/class_datasets", "name": "classdat"},
-                                            {"mountPath": "/classsave", "name": "classsave"}
+                                            {"mountPath": backend_mount, "name": "classification"},
+                                            {"mountPath": dataset_mount, "name": "classdat"},
+                                            {"mountPath": save_mount, "name": "classsave"}
                                         ],
                                         "resources": {
                                             "limits": {
@@ -419,9 +426,9 @@ def conduct_experiment_cls(model_selection, timestamp_path, dataset, lr_left, lr
                                 ],
                                 "volumes": [
                                     {"name": "shm", "emptyDir": {"medium": "Memory", "sizeLimit": "32Gi"}},
-                                    {"name": "classification", "hostPath": {"path": "/host/Classification", "type": "Directory"}},
-                                    {"name": "classdat", "hostPath": {"path": f"/host/{user_slug}/Datasets/Classification", "type": "Directory"}},
-                                    {"name": "classsave", "hostPath": {"path": f"/host/{user_slug}/Classification", "type": "Directory"}}
+                                    {"name": "classification", "hostPath": {"path": backend_host, "type": "Directory"}},
+                                    {"name": "classdat", "hostPath": {"path": dataset_host, "type": "Directory"}},
+                                    {"name": "classsave", "hostPath": {"path": save_host, "type": "Directory"}}
                                 ],
                                 "restartPolicy": "OnFailure"
                             }
@@ -438,7 +445,7 @@ def conduct_experiment_cls(model_selection, timestamp_path, dataset, lr_left, lr
     classification_experiment["spec"]["trialTemplate"]["trialSpec"]["spec"]["template"]["spec"]["containers"][0]["command"] = [
         "python",
         "-u",
-        "/classification/train.py",
+        f"{backend_mount}/train.py",
         "--dataset", dataset,
         "--model", model_selection,
         "--epochs", "${trialParameters.numEpochs}",
@@ -452,10 +459,13 @@ def conduct_experiment_cls(model_selection, timestamp_path, dataset, lr_left, lr
         "--dataset_already_split", str(dataset_already_split).lower(),
         "--transfer_learning", str(transfer_learning).lower()
     ]
+    if multispectral:
+        classification_experiment["spec"]["trialTemplate"]["trialSpec"]["spec"]["template"]["spec"]["containers"][0]["command"].extend(["--in_channels", str(in_channels)])
 
     exp_dir = os.path.join(BASE_HOST_PATH, user_slug, "exps")
     os.makedirs(exp_dir, exist_ok=True)
-    exp_path = os.path.join(exp_dir, f"cls_{model_selection.lower()}_{timestamp_path}.yaml")
+    prefix = "ms_cls" if multispectral else "cls"
+    exp_path = os.path.join(exp_dir, f"{prefix}_{model_selection.lower()}_{timestamp_path}.yaml")
 
     # Create YAML
     with open(exp_path, "w") as f:

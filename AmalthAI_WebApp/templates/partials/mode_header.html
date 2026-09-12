@@ -20,6 +20,11 @@
                 Classification
             </a>
 
+            <a href="{{ url_for(request.endpoint, mode='multispectral_classification', **request.view_args) }}"
+                class="btn btn-outline-primary flex-fill me-2 {% if mode == 'multispectral_classification' %}active{% endif %}">
+                Multispectral
+            </a>
+
             <a href="{{ url_for(request.endpoint, mode='detection', **request.view_args) }}"
                 class="btn btn-outline-primary flex-fill
                 {% if mode == 'detection' %}active{% endif %}">

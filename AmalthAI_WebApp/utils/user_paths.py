@@ -40,14 +40,17 @@ def ensure_user_folders(slug):
         os.path.join(root, "Datasets", "Segmentation"),
         os.path.join(root, "Datasets", "Object-Detection"),
         os.path.join(root, "Datasets", "Classification"),
+        os.path.join(root, "Datasets", "Multispectral-Classification"),
         os.path.join(root, "Segmentation", "runs"),
         os.path.join(root, "ObjectDetection", "runs"),
         os.path.join(root, "Classification", "runs"),
+        os.path.join(root, "MultispectralClassification", "runs"),
         os.path.join(root, "models_db"),
         os.path.join(root, "exps"),
         os.path.join(root, "inference", "segmentation"),
         os.path.join(root, "inference", "detection"),
         os.path.join(root, "inference", "classification"),
+        os.path.join(root, "inference", "multispectral_classification"),
         os.path.join(root, "tmp_datasets_zips"),
         os.path.join(root, "tmp_datasets"),
         os.path.join(root, "train_jobs"),
@@ -59,3 +62,4 @@ def ensure_user_folders(slug):
     ensure_model_db_file(os.path.join(root, "models_db", "trained_models_db_segm.csv"))
     ensure_model_db_file(os.path.join(root, "models_db", "trained_models_db_od.csv"))
     ensure_model_db_file(os.path.join(root, "models_db", "trained_models_db_cls.csv"))
+    ensure_model_db_file(os.path.join(root, "models_db", "trained_models_db_ms_cls.csv"))

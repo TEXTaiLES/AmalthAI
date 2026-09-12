@@ -54,6 +54,7 @@
                 </button>
                 <ul class="dropdown-menu w-100 shadow-lg border-0 dropdown-menu-custom">
                     <li><a class="dropdown-item rounded-2 py-2 px-3 dropdown-item-custom" href="{{url_for('train_model', mode='classification')}}">Classification</a></li>
+                    <li><a class="dropdown-item rounded-2 py-2 px-3 dropdown-item-custom" href="{{url_for('train_model', mode='multispectral_classification')}}">Multispectral Classification</a></li>
                     <li><a class="dropdown-item rounded-2 py-2 px-3 dropdown-item-custom" href="{{url_for('train_model', mode='segmentation')}}">Segmentation</a></li>
                     <li><a class="dropdown-item rounded-2 py-2 px-3 dropdown-item-custom" href="{{url_for('train_model', mode='detection')}}">Detection</a></li>
                 </ul>

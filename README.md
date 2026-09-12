@@ -134,7 +134,7 @@ docker pull ultralytics/ultralytics:8.4.112
     </a>
 </p>
 
-Important Note: Make sure that you keep the config.yml file updated inside `/AmalthAI_WebApp` folder with the correct image names and the shared directory path where the `Segmentation`, `Classification` and `ObjectDetection` folders are located.
+Important Note: Make sure that you keep the config.yml file updated inside `/AmalthAI_WebApp` folder with the correct image names and the shared directory path where the `Segmentation`, `Classification`, `MultispectralClassification` and `ObjectDetection` folders are located.
 
 ### Step 5 - Upload docker images into kind cluster
 

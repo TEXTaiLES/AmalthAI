@@ -6,7 +6,7 @@
 
 <div class="container my-5">
     <!-- Header -->
-    {% set header_text= "Collections for " ~ mode|capitalize %}
+    {% set header_text= "Collections for " ~ mode.replace("_", " ")|title %}
     {% include 'partials/mode_header.html' %}
 
     <p class="mb-4">Select a collection below to view its samples, or add a new dataset to expand your {{ mode }} library.</p>
