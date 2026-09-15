@@ -48,6 +48,7 @@ def ensure_user_folders(slug):
         os.path.join(root, "inference", "segmentation"),
         os.path.join(root, "inference", "detection"),
         os.path.join(root, "inference", "classification"),
+        os.path.join(root, "inference", "_hestia_results"),
         os.path.join(root, "tmp_datasets_zips"),
         os.path.join(root, "tmp_datasets"),
         os.path.join(root, "train_jobs"),

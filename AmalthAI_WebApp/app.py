@@ -31,7 +31,7 @@ from utils.vlm_utils import SYSTEM_PROMPT_TEMPLATE, SYSTEM_PROMPT_BLANKS, USER_P
 from utils import hestia_helpers
 from utils import inference_helpers
 from utils.inference_helpers import _inference_handoff_path, _parse_classification_output
-from utils.inference_helpers import _collect_inference_runs, _inference_params, _load_segmentation_color_table, _resolve_inference_model, _store_vlm_handoff
+from utils.inference_helpers import _collect_available_inference_runs, _has_available_inference_results, _inference_params, _load_segmentation_color_table, _resolve_inference_model, _store_vlm_handoff
 from utils.hestia_helpers import _dataset_manifest, _persist_dataset_to_hestia, _push_trained_model_to_hestia, _hestia_models_for_template, _persist_inference_to_hestia
 from utils.load_config import load_config, chown_target
 from utils import hestia_client as hc
@@ -741,11 +741,20 @@ def inference_results():
     if not model:
         return "Model not found", 404
 
-    results_runs = _collect_inference_runs(user_slug, mode, model_id)
+    results_runs, hestia_runs = _collect_available_inference_runs(user_slug, mode, model_id)
     color_table = (
         _load_segmentation_color_table(user_slug, model.get("trained_on"))
         if mode == "segmentation" else []
     )
+    if mode == "segmentation" and hestia_runs is not None and not color_table:
+        color_table = next(
+            (
+                (row.get("extra") or {}).get("color_table")
+                for row in hestia_runs
+                if (row.get("extra") or {}).get("color_table")
+            ),
+            [],
+        )
     return render_template(
         "inference_results.html",
         mode=mode,
@@ -765,14 +774,17 @@ def inference_result_vlm():
     model_id = request.form.get("model_id", "")
     timestamp = request.form.get("timestamp", "")
     filename = request.form.get("filename", "")
+    result_root = request.form.get("result_root", "classification")
     components = (model_id, timestamp, filename)
     if any(not value or secure_filename(value) != value for value in components):
         return "Invalid inference result", 400
+    if result_root not in ("classification", "_hestia_results/classification"):
+        return "Invalid inference result", 400
 
     base_name = os.path.splitext(filename)[0]
-    input_path = f"classification/inputs/{model_id}/{timestamp}/{filename}"
-    gradcam_path = f"classification/outputs/{model_id}/{timestamp}/{base_name}_gradcam.jpg"
-    output_path = f"classification/outputs/{model_id}/{timestamp}/{base_name}.txt"
+    input_path = f"{result_root}/inputs/{model_id}/{timestamp}/{filename}"
+    gradcam_path = f"{result_root}/outputs/{model_id}/{timestamp}/{base_name}_gradcam.jpg"
+    output_path = f"{result_root}/outputs/{model_id}/{timestamp}/{base_name}.txt"
 
     user_slug = get_current_user_slug()
     required_paths = (input_path, gradcam_path, output_path)
@@ -1135,8 +1147,11 @@ def inference():
                 # HESTIA: persist inference inputs + outputs (non-fatal).
                 if HESTIA_ENABLED and hestia_model:
                     try:
-                        cls_out_map = {os.path.basename(p): p
-                                       for p in glob.glob(os.path.join(output_dir, '*.txt'))}
+                        cls_output_paths = (
+                            glob.glob(os.path.join(output_dir, '*.txt'))
+                            + glob.glob(os.path.join(output_dir, '*_gradcam.jpg'))
+                        )
+                        cls_out_map = {os.path.basename(p): p for p in cls_output_paths}
                         _persist_inference_to_hestia(
                             user_slug, "classification", str(model_id), model_name,
                             dataset_name, files, save_dir, cls_out_map, None)
@@ -1150,7 +1165,10 @@ def inference():
     if error_msg:
         flash(error_msg, "danger")
 
-    has_inference_results = bool(_collect_inference_runs(user_slug, mode, model_id))
+    # Metadata-only check; artifacts are fetched lazily on the results page.
+    has_inference_results = _has_available_inference_results(
+        user_slug, mode, model_id
+    )
 
     return render_template(
         'inference.html',

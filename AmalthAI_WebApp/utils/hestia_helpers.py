@@ -107,7 +107,7 @@ def _hestia_models_for_template(user_slug, mode, csv_path):
     model_id as the link id (id=...) so inference selects by UUID, not row index.
     """
     rows = hc.list_models(user_slug, mode)
-    if rows is None:  # HESTIA unreachable -> fall back to the local CSV
+    if rows is None: # HESTIA unreachable -> fall back to the local CSV
         return load_models(csv_path)
     return [
         {
@@ -143,7 +143,6 @@ def _persist_inference_to_hestia(user_slug, mode, model_id, model_name, dataset_
         for out_name in output_map:
             if base in out_name:
                 mapping[out_name] = fn
-                break
     out_paths = list(output_map.values())
     hc.upload_inference_outputs(inf_id, out_paths, mapping=mapping,
                                color_table=color_table or None)

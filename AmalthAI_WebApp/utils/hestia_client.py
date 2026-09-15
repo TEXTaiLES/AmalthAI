@@ -19,6 +19,7 @@ import hashlib
 import logging
 import tarfile
 import tempfile
+from urllib.parse import quote
 
 import requests
 
@@ -484,3 +485,77 @@ def upload_inference_outputs(inference_id, file_paths, mapping=None, color_table
     resp = _post_files_multi(f"/amalthai/inference-runs/{inference_id}/outputs",
                              file_paths, data=data)
     return resp.get("outputs") if resp else None
+
+def list_inference_runs(owner_slug, mode=None, model_id=None):
+    """Return inference rows, or None when HESTIA is unreachable."""
+    params = {"owner_slug": owner_slug}
+    if mode:
+        params["mode"] = mode
+    if model_id is not None:
+        params["model_id"] = str(model_id)
+    rows = _get("/amalthai/inference-runs", params)
+    return rows if isinstance(rows, list) else None
+
+
+def get_inference_run(inference_id):
+    return _get(f"/amalthai/inference-runs/{inference_id}", None)
+
+
+def download_inference_artifact(object_key, dest_path):
+    """Download one inference artifact atomically through HESTIA's file proxy."""
+    parent = os.path.dirname(dest_path)
+    os.makedirs(parent, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(prefix=".hestia_", dir=parent)
+    os.close(fd)
+    try:
+        encoded_key = quote(str(object_key), safe="/")
+        if not _download(f"/storage/amalthai-inference/{encoded_key}", tmp_path):
+            return False
+        os.replace(tmp_path, dest_path)
+        return True
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
+
+def ensure_inference_results_local(run_row, cache_mode_root):
+    """Ensure a completed HESTIA inference run exists in _hestia_results.
+
+    The cache mirrors the normal inference layout below cache_mode_root:
+    inputs|outputs/<model_id>/<inference_id>/...
+    """
+    inference_id = str(run_row.get("inference_id") or "")
+    model_id = str(run_row.get("model_id") or "")
+    if (not inference_id or not model_id
+            or os.path.basename(inference_id) != inference_id
+            or os.path.basename(model_id) != model_id):
+        logger.warning("[hestia] invalid inference/model id in inference row")
+        return False
+
+    artifacts = []
+    for kind in ("inputs", "outputs"):
+        for item in run_row.get(kind) or []:
+            filename = str(item.get("filename") or "")
+            object_key = str(item.get("key") or "")
+            expected_prefix = f"{inference_id}/{kind}/"
+            if (not filename or os.path.basename(filename) != filename
+                    or not object_key.startswith(expected_prefix)):
+                logger.warning(f"[hestia] unsafe {kind} artifact ignored for {inference_id}")
+                return False
+
+            path_parts = [cache_mode_root, kind, model_id, inference_id]
+            if kind == "outputs" and run_row.get("mode") == "detection":
+                path_parts.append("predict")
+            path_parts.append(filename)
+            artifacts.append((object_key, os.path.join(*path_parts)))
+
+    if not artifacts:
+        return False
+
+    for object_key, destination in artifacts:
+        if os.path.isfile(destination) and os.path.getsize(destination) > 0:
+            continue
+        if not download_inference_artifact(object_key, destination):
+            logger.warning(f"[hestia] failed to rehydrate inference artifact {object_key}")
+            return False
+    return True

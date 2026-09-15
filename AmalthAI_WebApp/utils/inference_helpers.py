@@ -160,9 +160,11 @@ def _load_segmentation_color_table(user_slug, dataset_name):
     return color_table
 
 
-def _collect_inference_runs(user_slug, mode, model_id):
-    """Rebuild completed inference runs from the current user's saved files."""
-    inference_root = os.path.join(user_root(user_slug), "inference", mode)
+def _collect_inference_runs(user_slug, mode, model_id, inference_root=None,
+                            run_ids=None, url_prefix=None):
+    """Rebuild completed inference runs from a local or HESTIA cache root."""
+    inference_root = inference_root or os.path.join(user_root(user_slug), "inference", mode)
+    url_prefix = url_prefix or mode
     inputs_root = os.path.join(inference_root, "inputs", str(model_id))
     outputs_root = os.path.join(inference_root, "outputs", str(model_id))
     if not os.path.isdir(inputs_root):
@@ -170,6 +172,8 @@ def _collect_inference_runs(user_slug, mode, model_id):
 
     runs = []
     for timestamp in sorted(os.listdir(inputs_root), reverse=True):
+        if run_ids is not None and timestamp not in run_ids:
+            continue
         input_dir = os.path.join(inputs_root, timestamp)
         output_dir = os.path.join(outputs_root, timestamp)
         if not os.path.isdir(input_dir) or not os.path.isdir(output_dir):
@@ -192,18 +196,19 @@ def _collect_inference_runs(user_slug, mode, model_id):
                 run_results.append({
                     "input_file": url_for(
                         "user_inference_files",
-                        filename=f"classification/inputs/{model_id}/{timestamp}/{filename}",
+                        filename=f"{url_prefix}/inputs/{model_id}/{timestamp}/{filename}",
                     ),
                     "output_text": output_text,
                     "gradcam_file": (
                         url_for(
                             "user_inference_files",
-                            filename=f"classification/outputs/{model_id}/{timestamp}/{gradcam_filename}",
+                            filename=f"{url_prefix}/outputs/{model_id}/{timestamp}/{gradcam_filename}",
                         )
                         if os.path.isfile(gradcam_path) else None
                     ),
                     "filename": filename,
                     "timestamp": timestamp,
+                    "result_root": url_prefix,
                 })
                 continue
 
@@ -229,11 +234,11 @@ def _collect_inference_runs(user_slug, mode, model_id):
             run_results.append({
                 "input_image": url_for(
                     "user_inference_files",
-                    filename=f"{mode}/inputs/{model_id}/{timestamp}/{filename}",
+                    filename=f"{url_prefix}/inputs/{model_id}/{timestamp}/{filename}",
                 ),
                 "output_image": url_for(
                     "user_inference_files",
-                    filename=f"{mode}/outputs/{model_id}/{timestamp}/{output_segment}{output_filename}",
+                    filename=f"{url_prefix}/outputs/{model_id}/{timestamp}/{output_segment}{output_filename}",
                 ),
             })
 
@@ -241,6 +246,56 @@ def _collect_inference_runs(user_slug, mode, model_id):
             runs.append({"timestamp": timestamp, "results": run_results})
 
     return runs
+
+
+def _collect_available_inference_runs(user_slug, mode, model_id):
+    """Use HESTIA as authoritative source, falling back locally if unavailable."""
+    if HESTIA_ENABLED:
+        hestia_rows = hc.list_inference_runs(user_slug, mode, model_id)
+        if hestia_rows is not None:
+            cache_root = os.path.join(
+                user_root(user_slug), "inference", "_hestia_results", mode
+            )
+            available_ids = set()
+            for row in hestia_rows:
+                if row.get("status") != "completed":
+                    continue
+                if hc.ensure_inference_results_local(row, cache_root):
+                    available_ids.add(str(row.get("inference_id")))
+            cached_runs = _collect_inference_runs(
+                user_slug,
+                mode,
+                model_id,
+                inference_root=cache_root,
+                run_ids=available_ids,
+                url_prefix=f"_hestia_results/{mode}",
+            )
+            cached_by_id = {run["timestamp"]: run for run in cached_runs}
+            ordered_runs = []
+            for row in hestia_rows:
+                inference_id = str(row.get("inference_id"))
+                cached_run = cached_by_id.get(inference_id)
+                if cached_run is None:
+                    continue
+                cached_run["timestamp"] = row.get("created_at") or inference_id
+                ordered_runs.append(cached_run)
+            return ordered_runs, hestia_rows
+
+    return _collect_inference_runs(user_slug, mode, model_id), None
+
+
+def _has_available_inference_results(user_slug, mode, model_id):
+    """Check result availability without downloading inference artifacts."""
+    if HESTIA_ENABLED:
+        rows = hc.list_inference_runs(user_slug, mode, model_id)
+        if rows is not None:
+            return any(
+                row.get("status") == "completed"
+                and bool(row.get("inputs"))
+                and bool(row.get("outputs"))
+                for row in rows
+            )
+    return bool(_collect_inference_runs(user_slug, mode, model_id))
 
 
 def _store_vlm_handoff(input_path, gradcam_path, output_path):
