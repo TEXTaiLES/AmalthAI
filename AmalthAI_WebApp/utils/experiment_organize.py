@@ -76,7 +76,7 @@ def conduct_experiment_seg(model_selection, timestamp_path, dataset, lr_left, lr
                                 "containers": [
                                     {
                                         "name": "training-container",
-                                        "image": "segm_cls_image_v3:latest",
+                                        "image": config["images"]["segmentation"],
                                         "imagePullPolicy": "IfNotPresent",
                                         "command": [
                                             "python",
@@ -232,7 +232,7 @@ def conduct_experiment_od(model_selection, timestamp_path, dataset, lr_left, lr_
                                 "containers": [
                                     {
                                         "name": "training-container",
-                                        "image": "ultralytics/ultralytics:latest",
+                                        "image": config["images"]["detection"],
                                         "imagePullPolicy": "IfNotPresent",
                                         "command": [
                                             "python",
@@ -394,7 +394,7 @@ def conduct_experiment_cls(model_selection, timestamp_path, dataset, lr_left, lr
                                 "containers": [
                                     {
                                         "name": "training-container",
-                                        "image": "segm_cls_image_v3:latest",
+                                        "image": config["images"]["classification"],
                                         "imagePullPolicy": "IfNotPresent",
                                         "command": [
                                             "python",
