@@ -67,6 +67,7 @@ future==1.0.0
 gdown==5.2.0
 humanfriendly==10.0
 imageio==2.37.0
+imagecodecs==2025.8.2
 imgviz==1.7.6
 kiwisolver==1.4.9
 lazy-loader==0.4

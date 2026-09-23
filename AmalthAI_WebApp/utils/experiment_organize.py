@@ -76,7 +76,7 @@ def conduct_experiment_seg(model_selection, timestamp_path, dataset, lr_left, lr
                                 "containers": [
                                     {
                                         "name": "training-container",
-                                        "image": "segm_cls_image:latest",
+                                        "image": "segm_cls_image_v3:latest",
                                         "imagePullPolicy": "IfNotPresent",
                                         "command": [
                                             "python",
@@ -392,7 +392,7 @@ def conduct_experiment_cls(model_selection, timestamp_path, dataset, lr_left, lr
                                 "containers": [
                                     {
                                         "name": "training-container",
-                                        "image": "segm_cls_image:latest",
+                                        "image": "segm_cls_image_v3:latest",
                                         "imagePullPolicy": "IfNotPresent",
                                         "command": [
                                             "python",
