@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory, g, session
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file, send_from_directory, g, session
 from flask_login import login_required, logout_user, current_user
 from werkzeug.utils import secure_filename
 import tomllib
@@ -16,11 +16,12 @@ import docker
 import requests
 import base64
 import mimetypes
+from io import BytesIO
 from urllib.parse import quote
 from datetime import datetime
 from utils.auth import init_auth
 from utils.models_page import write_results
-from utils.helpers import load_datasets, load_models_available, load_dataset_info, get_max_image_size, load_models, get_best_timestamp
+from utils.helpers import create_multispectral_preview, load_datasets, load_models_available, load_dataset_info, get_max_image_size, load_models, get_best_timestamp
 from utils.job_status import _job_status_path, _mark_stale_if_dead, _write_job_status, _read_job_status, _run_training_job
 from utils import user_paths
 from utils.user_paths import safe_user_slug, user_root, get_current_user_slug, get_current_user_email, ensure_user_folders
@@ -137,6 +138,59 @@ def user_dataset_files(filename):
     return send_from_directory(data_dir, filename)
 
 
+@app.route("/multispectral-preview/<path:filename>")
+@login_required
+def multispectral_preview(filename):
+    user_slug = get_current_user_slug()
+    data_dir = os.path.abspath(os.path.join(user_root(user_slug), "Datasets"))
+    requested = os.path.abspath(os.path.join(data_dir, filename))
+
+    if not requested.startswith(data_dir + os.sep):
+        return "Forbidden", 403
+
+    parts = os.path.normpath(filename).split(os.sep)
+    if len(parts) < 3 or parts[0] != HESTIA_DATASET_DIR["multispectral_classification"]:
+        return "Invalid multispectral path", 400
+
+    metadata_path = os.path.join(data_dir, parts[0], parts[1], "multispectral_metadata.json")
+    try:
+        with open(metadata_path, "r", encoding="utf-8") as handle:
+            metadata = json.load(handle)
+        num_channels = int(metadata.get("num_channels") or metadata.get("in_channels"))
+        image = create_multispectral_preview(requested, num_channels)
+        output = BytesIO()
+        image.save(output, format="PNG")
+        output.seek(0)
+        return send_file(output, mimetype="image/png")
+    except (OSError, TypeError, ValueError, KeyError):
+        return "Preview unavailable", 400
+
+
+@app.route("/multispectral-inference-preview/<path:filename>")
+@login_required
+def multispectral_inference_preview(filename):
+    user_slug = get_current_user_slug()
+    data_dir = os.path.realpath(os.path.join(user_root(user_slug), "inference"))
+    requested = os.path.realpath(os.path.join(data_dir, filename))
+    parts = os.path.normpath(filename).split(os.sep)
+    prefix = parts[:2] == ["multispectral_classification", "inputs"]
+    hestia_prefix = parts[:3] == ["_hestia_results", "multispectral_classification", "inputs"]
+
+    if not requested.startswith(data_dir + os.sep):
+        return "Forbidden", 403
+    if not (prefix or hestia_prefix) or os.path.splitext(filename)[1].lower() not in (".tif", ".tiff"):
+        return "Invalid multispectral path", 400
+
+    try:
+        image = create_multispectral_preview(requested)
+        output = BytesIO()
+        image.save(output, format="PNG")
+        output.seek(0)
+        return send_file(output, mimetype="image/png")
+    except (OSError, TypeError, ValueError, KeyError):
+        return "Preview unavailable", 400
+
+
 @app.route("/user-inference/<path:filename>")
 @login_required
 def user_inference_files(filename):
@@ -202,12 +256,22 @@ def dataset():
     max_w, max_h = get_max_image_size(dataset_items)
     dataset_info["max_width"]  = max_w
     dataset_info["max_height"] = max_h
+    if mode == "multispectral_classification":
+        metadata_path = os.path.join(dataset_path[mode], name, "multispectral_metadata.json")
+        try:
+            with open(metadata_path, "r", encoding="utf-8") as handle:
+                metadata = json.load(handle)
+            dataset_info["num_channels"] = int(metadata.get("num_channels") or metadata.get("in_channels"))
+        except (OSError, TypeError, ValueError, AttributeError):
+            dataset_info["num_channels"] = None
 
     for item in dataset_items:
         image_path = item.get("image")
         if image_path:
             rel_path = os.path.relpath(image_path, user_datasets_root)
             item["image_url"] = url_for("user_dataset_files", filename=rel_path)
+            if mode == "multispectral_classification":
+                item["preview_url"] = url_for("multispectral_preview", filename=rel_path)
             item["display_name"] = os.path.basename(image_path)
 
     pager_size_options = [15, 30, 50, 80, 120]
@@ -1270,6 +1334,10 @@ def inference():
                     results.append({
                         "input_file": url_for(
                             "user_inference_files",
+                            filename=f"multispectral_classification/inputs/{model_id}/{timestamp}/{filename}",
+                        ),
+                        "preview_file": url_for(
+                            "multispectral_inference_preview",
                             filename=f"multispectral_classification/inputs/{model_id}/{timestamp}/{filename}",
                         ),
                         "output_text": output_text,

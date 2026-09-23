@@ -119,12 +119,11 @@
                                 </td>
                                 <td>
                                     <div class="d-flex flex-column align-items-center gap-2">
-                                        {% if mode == "classification" %}
-                                        <img src="{{ result.get('input_file') }}"
+                                        <img src="{{ result.get('preview_file', result.get('input_file')) }}"
                                             alt="{{ result.get('filename','image') }}"
                                             class="img-thumbnail"
                                             style="max-height:200px;">
-                                        {% endif %}
+                                        {% if mode == "multispectral_classification" %}<div class="small text-muted">Band 1 (grayscale)</div>{% endif %}
                                         <a href="{{ result.get('input_file') }}" download class="btn btn-outline-primary btn-sm">Download {{ "TIFF" if mode == "multispectral_classification" else "Image" }}</a>
                                     </div>
                                 </td>
@@ -149,6 +148,22 @@
                                 <td colspan="{{ 2 if mode == 'multispectral_classification' else 3 }}" class="text-center">
                                     <div class="d-inline-block text-start p-3 rounded-4 border" style="min-width:300px; background:#fafafa;">
                                         {% set lines = result.output_text.split('\n') %}
+                                        {% if mode == 'multispectral_classification' %}
+                                            {% set top = namespace(name='', score='') %}
+                                            {% for line in lines %}
+                                                {% if not top.name and ':' in line and '(' in line and '%' in line %}
+                                                    {% set parts = line.split(':', 1) %}
+                                                    {% set top.name = parts[0].strip() %}
+                                                    {% set top.score = parts[1].split('(')[0].strip() %}
+                                                {% endif %}
+                                            {% endfor %}
+                                            {% if top.name %}
+                                            <div class="d-flex justify-content-between align-items-baseline mb-3">
+                                                <span class="fs-5" style="font-weight:600; letter-spacing:-0.2px;">{{ top.name }}</span>
+                                                <span class="badge rounded-pill bg-success bg-opacity-10 text-success" style="font-size:0.75rem;">{{ top.score }}</span>
+                                            </div>
+                                            {% endif %}
+                                        {% endif %}
                                         {% for line in lines %}
                                             {% if 'Predicted Class' in line %}
                                                 {% set pred_parts = line.split('|') %}

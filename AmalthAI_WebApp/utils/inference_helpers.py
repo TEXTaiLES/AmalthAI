@@ -216,6 +216,11 @@ def _collect_inference_runs(user_slug, mode, model_id, inference_root=None,
                         )
                         if os.path.isfile(gradcam_path) else None
                     )
+                else:
+                    result["preview_file"] = url_for(
+                        "multispectral_inference_preview",
+                        filename=f"{url_prefix}/inputs/{model_id}/{timestamp}/{filename}",
+                    )
                 run_results.append(result)
                 continue
 

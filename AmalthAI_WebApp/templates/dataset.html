@@ -22,8 +22,14 @@
                             </tr>
                              <tr>
                                 <th class="text-capitalize" style="width: 30%">Type of Data</th>
-                                <td>2D Images</td>
+                                <td>{{ "Multispectral imagery" if mode == "multispectral_classification" else "2D Images" }}</td>
                             </tr>
+                            {% if mode == "multispectral_classification" %}
+                            <tr>
+                                <th class="text-capitalize" style="width: 30%">Number of Channels</th>
+                                <td>{{ dataset_info.num_channels or "—" }}</td>
+                            </tr>
+                            {% endif %}
                             <tr>
                                 <th class="text-capitalize" style="width: 30%">Images Resolution</th>
                                 <td>{{ dataset_info.max_width }} × {{ dataset_info.max_height }}</td>
@@ -59,9 +65,6 @@
                             {% for item in dataset_items %}
                             <tr>
                                 <td>
-                                    {% if mode == "multispectral_classification" %}
-                                    <a href="{{ item.get('image_url', item.get('image')) }}" download>{{ item.get('display_name', item.get('image', '')) }}</a>
-                                    {% else %}
                                     <button type="button" class="btn btn-link p-0" data-bs-toggle="modal" data-bs-target="#modal-{{ loop.index }}">
                                         {{ item.get('display_name', item.get('image', '')) }}
                                     </button>
@@ -76,23 +79,24 @@
                                                     </h5>
                                                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                                                 </div>
-                                                <div class="modal-body d-flex justify-content-around">
-                                                    <img src="{{ item.get('image_url', item.get('image')) }}" alt="input image" class="img-fluid me-2" style="max-height: 400px;">
+                                                <div class="modal-body text-center">
+                                                    <img src="{{ item.get('preview_url', item.get('image_url', item.get('image'))) }}" alt="input image" class="img-fluid" style="max-height: 400px;">
+                                                    {% if mode == "multispectral_classification" %}
+                                                    <div class="small text-muted mt-2">Preview: Band 1 (grayscale).</div>
+                                                    {% endif %}
                                                 </div>
                                                 <div class="modal-footer">
-                                                    <a href="{{ item.get('image_url', item.get('image')) }}" download class="btn btn-primary">Download</a>
+                                                    <a href="{{ item.get('image_url', item.get('image')) }}" download class="btn btn-primary">Download{% if mode == "multispectral_classification" %} TIFF{% endif %}</a>
                                                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Back</button>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
-                                    {% endif %}
                                 </td>
                                 <td>
+                                    <img src="{{ item.get('preview_url', item.get('image_url', item.get('image'))) }}" alt="image" class="img-thumbnail" style="max-height: 200px;">
                                     {% if mode == "multispectral_classification" %}
-                                    <a href="{{ item.get('image_url', item.get('image')) }}" download class="btn btn-outline-primary btn-sm">Download TIFF</a>
-                                    {% else %}
-                                    <img src="{{ item.get('image_url', item.get('image')) }}" alt="image" class="img-thumbnail" style="max-height: 200px;">
+                                    <div class="small text-muted mt-1">Band 1 (grayscale)</div>
                                     {% endif %}
                                 </td>
                                 <td>

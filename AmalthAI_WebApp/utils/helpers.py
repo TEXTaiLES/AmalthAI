@@ -2,6 +2,9 @@ import os
 import csv
 import subprocess
 from datetime import datetime
+
+import numpy as np
+import tifffile
 from PIL import Image
 
 # prefer filesystem birth time when available else fall back to mtime.
@@ -214,6 +217,36 @@ def load_dataset_info(filepath, name, mode):
 
     return dataset_info, dataset_items
 
+
+
+def create_multispectral_preview(filepath, num_channels=None):
+    with tifffile.TiffFile(filepath) as image:
+        series = image.series[0]
+        if num_channels is None:
+            shape = series.shape
+            num_channels = 1 if len(shape) == 2 else min(shape[0], shape[-1])
+        array = series.asarray()
+    if array.ndim == 2 and num_channels == 1:
+        bands = array[None, :, :]
+    elif array.ndim == 3 and array.shape[0] == num_channels:
+        bands = array
+    elif array.ndim == 3 and array.shape[-1] == num_channels:
+        bands = array.transpose(2, 0, 1)
+    else:
+        raise ValueError(f"Unsupported TIFF shape: {array.shape}")
+
+    band = bands[0].astype(np.float32)
+    normalized = np.zeros(band.shape, dtype=np.uint8)
+    finite = np.isfinite(band)
+    if finite.any():
+        low, high = np.percentile(band[finite], (2, 98))
+        if high > low:
+            scaled = np.clip((band - low) / (high - low), 0, 1)
+            normalized = np.nan_to_num(scaled * 255).astype(np.uint8)
+
+    image = Image.fromarray(normalized, "L")
+    image.thumbnail((1000, 1000))
+    return image
 
 
 # Shows the available models for each task which are registered in the CSV files
