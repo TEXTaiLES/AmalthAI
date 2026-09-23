@@ -46,7 +46,7 @@
                 <div class="table-responsive mb-4">
 
                     <table class="table table-striped">
-                        {% if mode == 'classification' %}
+                        {% if mode in ['classification', 'multispectral_classification'] %}
                         <thead>
                             <tr>
                                 <th>Name</th>
@@ -59,6 +59,9 @@
                             {% for item in dataset_items %}
                             <tr>
                                 <td>
+                                    {% if mode == "multispectral_classification" %}
+                                    <a href="{{ item.get('image_url', item.get('image')) }}" download>{{ item.get('display_name', item.get('image', '')) }}</a>
+                                    {% else %}
                                     <button type="button" class="btn btn-link p-0" data-bs-toggle="modal" data-bs-target="#modal-{{ loop.index }}">
                                         {{ item.get('display_name', item.get('image', '')) }}
                                     </button>
@@ -83,9 +86,14 @@
                                             </div>
                                         </div>
                                     </div>
+                                    {% endif %}
                                 </td>
                                 <td>
+                                    {% if mode == "multispectral_classification" %}
+                                    <a href="{{ item.get('image_url', item.get('image')) }}" download class="btn btn-outline-primary btn-sm">Download TIFF</a>
+                                    {% else %}
                                     <img src="{{ item.get('image_url', item.get('image')) }}" alt="image" class="img-thumbnail" style="max-height: 200px;">
+                                    {% endif %}
                                 </td>
                                 <td>
                                     <pre style="margin:0; white-space:pre-wrap;">{{ item.get('class') }}</pre>

@@ -65,7 +65,7 @@ def load_datasets(filepath, mode):
                     "num_samples": num_items
                 })
 
-        elif mode == "Cls":
+        elif mode in ("Cls", "MsCls"):
             if os.path.isdir(dataset_folder) and not name.startswith('.'):
                 train_dir = os.path.join(dataset_folder, "train")
                 val_dir = os.path.join(dataset_folder, "val")
@@ -176,7 +176,7 @@ def load_dataset_info(filepath, name, mode):
             for f in val_files
         ]
     
-    elif mode == "classification":
+    elif mode in ("classification", "multispectral_classification"):
         dataset_items = []
         if os.path.isdir(dataset_folder):
             train_dir = os.path.join(dataset_folder, "train")

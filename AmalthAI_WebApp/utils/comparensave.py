@@ -17,7 +17,7 @@ def comparensave(experiment_dir, timestamp, csv_path, dataset_path, mode, maximi
         dataset_name = os.path.basename(dataset_path.rstrip('/'))
     elif mode == "OD":
         dataset_name = os.path.basename(os.path.dirname(dataset_path.rstrip('/')))
-    elif mode == "Cls":
+    elif mode in ("Cls", "MsCls"):
         dataset_name = os.path.basename(dataset_path.rstrip('/'))
 
     for model in os.listdir(experiment_dir):
@@ -34,9 +34,10 @@ def comparensave(experiment_dir, timestamp, csv_path, dataset_path, mode, maximi
                 weights_path = os.path.join(run_path, 'best_model.pth')
             elif mode == "OD":
                 weights_path = os.path.join(run_path, 'weights', 'best.pt')
-            elif mode == "Cls":
+            elif mode in ("Cls", "MsCls"):
                 weights_path = os.path.join(run_path, 'best_model.pth')
-                config_path = os.path.join(run_path, 'class_names.json')
+                config_name = 'model_config.json' if mode == 'MsCls' else 'class_names.json'
+                config_path = os.path.join(run_path, config_name)
 
             if not os.path.isfile(score_path):
                 continue

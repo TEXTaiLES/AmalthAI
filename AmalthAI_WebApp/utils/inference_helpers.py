@@ -76,6 +76,10 @@ def _inference_params(user_slug):
             "csv": os.path.join(user_root(user_slug), "models_db", "trained_models_db_cls.csv"),
             "metric": "Accuracy",
         },
+        "multispectral_classification": {
+            "csv": os.path.join(user_root(user_slug), "models_db", "trained_models_db_ms_cls.csv"),
+            "metric": "Accuracy",
+        },
     }
 
 
@@ -94,6 +98,7 @@ def _resolve_inference_model(mode_params, raw_id):
                 "score": hestia_model.get("score"),
                 "date": hestia_model.get("trained_date"),
                 "model_id": hestia_model.get("model_id"),
+                "extra": hestia_model.get("extra") or {},
             }
             model_id = hestia_model.get("model_id")
 
@@ -120,7 +125,7 @@ def _list_inference_images(folder):
     if not os.path.isdir(folder):
         return []
 
-    image_extensions = {".png", ".jpg", ".jpeg", ".bmp", ".webp"}
+    image_extensions = {".png", ".jpg", ".jpeg", ".bmp", ".webp", ".tif", ".tiff"}
     return sorted(
         os.path.join(folder, filename)
         for filename in os.listdir(folder)
@@ -184,32 +189,34 @@ def _collect_inference_runs(user_slug, mode, model_id, inference_root=None,
             filename = os.path.basename(input_path)
             base_name = os.path.splitext(filename)[0]
 
-            if mode == "classification":
+            if mode in ("classification", "multispectral_classification"):
                 output_path = os.path.join(output_dir, f"{base_name}.txt")
                 if not os.path.isfile(output_path):
                     continue
                 with open(output_path, "r", encoding="utf-8") as output_file:
                     output_text = output_file.read()
 
-                gradcam_filename = f"{base_name}_gradcam.jpg"
-                gradcam_path = os.path.join(output_dir, gradcam_filename)
-                run_results.append({
+                result = {
                     "input_file": url_for(
                         "user_inference_files",
                         filename=f"{url_prefix}/inputs/{model_id}/{timestamp}/{filename}",
                     ),
                     "output_text": output_text,
-                    "gradcam_file": (
+                    "filename": filename,
+                    "timestamp": timestamp,
+                    "result_root": url_prefix,
+                }
+                if mode == "classification":
+                    gradcam_filename = f"{base_name}_gradcam.jpg"
+                    gradcam_path = os.path.join(output_dir, gradcam_filename)
+                    result["gradcam_file"] = (
                         url_for(
                             "user_inference_files",
                             filename=f"{url_prefix}/outputs/{model_id}/{timestamp}/{gradcam_filename}",
                         )
                         if os.path.isfile(gradcam_path) else None
-                    ),
-                    "filename": filename,
-                    "timestamp": timestamp,
-                    "result_root": url_prefix,
-                })
+                    )
+                run_results.append(result)
                 continue
 
             output_search_dir = os.path.join(output_dir, "predict") if mode == "detection" else output_dir

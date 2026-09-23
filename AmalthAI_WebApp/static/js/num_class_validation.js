@@ -1,7 +1,9 @@
 document.addEventListener("DOMContentLoaded", () => {
     // Elements
-    const input     = document.getElementById("numClassesInput");
-    const error     = document.getElementById("num_classes_error");
+    const input        = document.getElementById("numClassesInput");
+    const error        = document.getElementById("num_classes_error");
+    const channelInput = document.getElementById("numChannelsInput");
+    const channelError = document.getElementById("num_channels_error");
     const submitBtn = document.getElementById("submitBtn");
     const zipInput  = document.getElementById("datasetZipInput");
     const loader    = document.getElementById("zipUploadLoader");
@@ -9,7 +11,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // State flags
     const hasNumClasses = !!input;
-    let numClassesValid = !hasNumClasses; 
+    const hasNumChannels = !!channelInput;
+    let numClassesValid = !hasNumClasses;
+    let numChannelsValid = !hasNumChannels;
     let uploadComplete   = false;
     let uploadInProgress = false;
 
@@ -46,10 +50,25 @@ document.addEventListener("DOMContentLoaded", () => {
         return valid;
     }
 
+    // Validate number of multispectral channels
+    function validateNumChannels() {
+        if (!channelInput) return true;
+        const min = parseInt(channelInput.min);
+        const max = parseInt(channelInput.max);
+        const val = Number(channelInput.value);
+        const valid = Number.isInteger(val) && val >= min && val <= max;
+
+        channelInput.classList.toggle("is-invalid", !valid);
+        if (channelError) channelError.classList.toggle("d-none", valid);
+        numChannelsValid = valid;
+        setSubmitState();
+        return valid;
+    }
+
     // Enable/disable submit based on combined conditions
     function setSubmitState() {
-        // Submit enabled only when classes valid, upload finished successfully, and not currently uploading
-        submitBtn.disabled = !(numClassesValid && uploadComplete && !uploadInProgress);
+        // Submit enabled only when numeric fields are valid and the upload has finished
+        submitBtn.disabled = !(numClassesValid && numChannelsValid && uploadComplete && !uploadInProgress);
     }
 
     // Handle async zip upload
@@ -113,11 +132,16 @@ document.addEventListener("DOMContentLoaded", () => {
         input.addEventListener("input", validateNumClasses);
         input.addEventListener("change", validateNumClasses);
     }
+    if (channelInput) {
+        channelInput.addEventListener("input", validateNumChannels);
+        channelInput.addEventListener("change", validateNumChannels);
+    }
     if (zipInput) {
         zipInput.addEventListener('change', handleZipSelection);
     }
 
     // Initial validation
     validateNumClasses();
+    validateNumChannels();
     setSubmitState();
 });

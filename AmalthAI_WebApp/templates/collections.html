@@ -6,17 +6,17 @@
 
 <div class="container my-5">
     <!-- Header -->
-    {% set header_text= "Collections for " ~ mode|capitalize %}
+    {% set header_text= "Collections for " ~ ('Classification' if mode == 'multispectral_classification' else mode|capitalize) %}
     {% include 'partials/mode_header.html' %}
 
-    <p class="mb-4">Select a collection below to view its samples, or add a new dataset to expand your {{ mode }} library.</p>
+    <p class="mb-4">Select a collection below to view its samples, or add a new dataset to expand your {{ "classification" if mode == "multispectral_classification" else mode }} library.</p>
     
     <!-- Add model button -->
     <div class="row mb-3">
         <div class="col text-start">
             <a href="{{ url_for('add_dataset', mode=mode) }}" class="btn btn-success">
                 <i class="bi bi-plus"></i>
-                Add a new {{ mode }} dataset
+                Add a new {{ "multispectral classification" if mode == "multispectral_classification" else mode }} dataset
             </a>
         </div>
     </div>

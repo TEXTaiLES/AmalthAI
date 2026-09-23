@@ -55,7 +55,7 @@
                         <h5 class="mb-2">Inference Results</h5>
                         <div class="small text-muted mb-2">Run {{ run.timestamp }}</div>
                         <table class="table table-striped">
-                            {% if mode == 'classification' %}
+                            {% if mode in ['classification', 'multispectral_classification'] %}
                             <thead>
                                 <tr>
                                     <th>Name</th>
@@ -69,10 +69,11 @@
                                     <td>{{ result.get('filename', result.get('name', 'file')) }}</td>
                                     <td>
                                         <div class="d-flex flex-column align-items-center gap-2">
-                                            <img src="{{ result.get('input_file') }}" alt="{{ result.get('filename', 'image') }}" class="img-thumbnail" style="max-height:200px;">
-                                            <a href="{{ result.get('input_file') }}" download class="btn btn-outline-primary btn-sm">Download Image</a>
+                                            {% if mode == "classification" %}<img src="{{ result.get('input_file') }}" alt="{{ result.get('filename', 'image') }}" class="img-thumbnail" style="max-height:200px;">{% endif %}
+                                            <a href="{{ result.get('input_file') }}" download class="btn btn-outline-primary btn-sm">Download {{ "TIFF" if mode == "multispectral_classification" else "Image" }}</a>
                                         </div>
                                     </td>
+                                    {% if mode == "classification" %}
                                     <td>
                                         {% if result.get('gradcam_file') %}
                                         <div class="d-flex flex-column align-items-center gap-2">
@@ -83,10 +84,11 @@
                                         N/A
                                         {% endif %}
                                     </td>
+                                    {% endif %}
                                 </tr>
                                 {% if result.get('output_text') %}
                                 <tr>
-                                    <td colspan="3" class="text-center">
+                                    <td colspan="{{ 2 if mode == 'multispectral_classification' else 3 }}" class="text-center">
                                         <div class="d-inline-block text-start p-3 rounded-4 border" style="min-width:300px; background:#fafafa;">
                                             {% set lines = result.output_text.split('\n') %}
                                             {% for line in lines %}

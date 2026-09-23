@@ -4,7 +4,7 @@
 
 <div class="container my-5">
     <!-- Header -->
-    {% set header_text= "Add new " ~ mode ~ " dataset" %}
+    {% set header_text= "Add new " ~ ("classification" if mode == "multispectral_classification" else mode) ~ " dataset" %}
     {% include 'partials/mode_header.html' %}
     
     <p class="mb-4">Upload your zipped dataset following the dataset structure guidelines.</p>
@@ -22,7 +22,7 @@
             <!-- Left content -->
             <div class="col-lg-8 d-flex flex-column justify-content-start">
                 <p class="mb-4">
-                    {% if mode == "classification" %}
+                    {% if mode in ["classification", "multispectral_classification"] %}
                     {% elif mode == "segmentation" %}
                     {% elif mode == "detection" %}
                     {% endif %}
@@ -59,7 +59,7 @@
             <!-- Right content -->
             <input type="hidden" id="mode" name="mode" value="{{ mode }}">
             <div class="col-lg-4">
-                {% if mode == "classification" %} 
+                {% if mode in ["classification", "multispectral_classification"] %}
                 <div class="card shadow-sm overflow-hidden border mb-3">
                     <div class="card-header bg-light">
                         <h6 class="mb-0"><i class="bi bi-tags me-2"></i>Number of Classes</h6>
@@ -91,6 +91,23 @@
                 </div>
                 {% endif %}
 
+                {% if mode == "multispectral_classification" %}
+                <div class="card shadow-sm overflow-hidden border mb-3">
+                    <div class="card-header bg-light">
+                        <h6 class="mb-0"><i class="bi bi-layers me-2"></i>Multispectral Channels</h6>
+                    </div>
+                    <div class="card-body">
+                        <label class="form-label">Number of channels</label>
+                        <input type="number" class="form-control" id="numChannelsInput"
+                               name="num_channels" min="1" max="64" step="1" value="4" required>
+                        <div class="form-text">Range: 1 - 64</div>
+                        <div class="invalid-feedback d-none mt-1" id="num_channels_error">
+                            Invalid number of channels
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
                 <div class="card shadow-sm overflow-hidden border">
                     <div class="card-header bg-light">
                         <h6 class="mb-0"><i class="bi bi-folder2-open me-2"></i>Dataset Structure</h6>
@@ -98,17 +115,17 @@
                     <div class="card-body">
                         <p class="small text-muted mb-3">The uploaded .zip file must follow this exact directory structure:</p>
                         
-                        {% if mode == "classification" %}
+                        {% if mode in ["classification", "multispectral_classification"] %}
                         <pre class="bg-light p-3 rounded small" style="font-size: 0.8rem; overflow-x: auto;"><code>DatasetName/
 ├── train/
 │   ├── class_1/
-│   │   ├── img1.jpg
+│   │   ├── {{ "sample1.tif" if mode == "multispectral_classification" else "img1.jpg" }}
 │   │   └── ...
 │   └── class_2/
 │       └── ...
 └── val/
     ├── class_1/
-    │   ├── imgX.jpg
+    │   ├── {{ "sampleX.tif" if mode == "multispectral_classification" else "imgX.jpg" }}
     │   └── ...
     └── class_2/
         └── ...</code></pre>
@@ -159,7 +176,7 @@
                     <div class="card-body">
                         <p class="small text-muted mb-0">
                             For more detailed information regarding dataset preparation and annotation, please refer to our 
-                            <a href="{% if mode == 'classification' %}https://textailes.github.io/AmalthAI-documentation/manual/classification/{% elif mode == 'segmentation' %}https://textailes.github.io/AmalthAI-documentation/manual/semantic_segm/{% elif mode == 'detection' %}https://textailes.github.io/AmalthAI-documentation/manual/object_detection/{% endif %}" target="_blank" class="text-decoration-none">official documentation</a>.
+                            <a href="{% if mode in ['classification', 'multispectral_classification'] %}https://textailes.github.io/AmalthAI-documentation/manual/classification/{% elif mode == 'segmentation' %}https://textailes.github.io/AmalthAI-documentation/manual/semantic_segm/{% elif mode == 'detection' %}https://textailes.github.io/AmalthAI-documentation/manual/object_detection/{% endif %}" target="_blank" class="text-decoration-none">official documentation</a>.
                         </p>
                     </div>
                 </div>

@@ -16,7 +16,7 @@
 
             <a href="{{ url_for(request.endpoint, mode='classification', **request.view_args) }}"
                 class="btn btn-outline-primary flex-fill me-2
-                {% if mode == 'classification' %}active{% endif %}">
+                {% if mode in ['classification', 'multispectral_classification'] %}active{% endif %}">
                 Classification
             </a>
 
@@ -26,5 +26,18 @@
                 Detection
             </a>
         </div>
+
+        {% if mode in ['classification', 'multispectral_classification'] and request.endpoint in ['train_model', 'models', 'collections', 'add_dataset'] %}
+        <div class="d-flex justify-content-between mb-3">
+            <a href="{{ url_for(request.endpoint, mode='classification', **request.view_args) }}"
+                class="btn btn-sm btn-outline-secondary flex-fill me-2 {% if mode == 'classification' %}active{% endif %}">
+                2D Images
+            </a>
+            <a href="{{ url_for(request.endpoint, mode='multispectral_classification', **request.view_args) }}"
+                class="btn btn-sm btn-outline-secondary flex-fill {% if mode == 'multispectral_classification' %}active{% endif %}">
+                Multispectral Imagery
+            </a>
+        </div>
+        {% endif %}
     </div>
 </div>

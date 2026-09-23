@@ -27,12 +27,13 @@ def write_results(base_path, db_loc, mode, user_slug=None):
             new_path_weights = data_prefix + "/ObjectDetection" + weights_path.split("/ObjectDetection", 1)[1]
             new_path_config = data_prefix + "/ObjectDetection" + config_path .split("/ObjectDetection", 1)[1]
             col_5 =  round(float(last_row[4]), 4)
-        elif mode == "Cls":
+        elif mode in ("Cls", "MsCls"):
             data_prefix = "/data"
             if user_slug:
                 data_prefix = f"/data/{user_slug}"
-            new_path_weights = data_prefix + "/Classification" + weights_path.split("/Classification", 1)[1]
-            new_path_config = data_prefix + "/Classification" + config_path .split("/Classification", 1)[1]
+            root = "MultispectralClassification" if mode == "MsCls" else "Classification"
+            new_path_weights = data_prefix + f"/{root}" + weights_path.split(f"/{root}", 1)[1]
+            new_path_config = data_prefix + f"/{root}" + config_path.split(f"/{root}", 1)[1]
             col_5 =  round(float(last_row[4]), 2)
 
         new_row = [col_3, col_1, col_5, today,new_path_weights,new_path_config]

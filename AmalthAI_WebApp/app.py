@@ -90,6 +90,7 @@ HESTIA_METRIC = {
     "segmentation": "mIoU Score",
     "detection": "mAP 50-95 Score",
     "classification": "Accuracy",
+    "multispectral_classification": "Accuracy",
 }
 
 # AmalthAI dataset directories.
@@ -97,6 +98,7 @@ HESTIA_DATASET_DIR = {
     "segmentation": "Segmentation",
     "detection": "Object-Detection",
     "classification": "Classification",
+    "multispectral_classification": "Multispectral-Classification",
 }
 
 dataset_processing.init(HESTIA_ENABLED, HESTIA_DATASET_DIR)
@@ -179,7 +181,8 @@ def dataset():
     dataset_path = {
         "segmentation"  : f"{user_datasets_root}/Segmentation/",
         "detection"     : f"{user_datasets_root}/Object-Detection/",
-        "classification": f"{user_datasets_root}/Classification/"
+        "classification": f"{user_datasets_root}/Classification/",
+        "multispectral_classification": f"{user_datasets_root}/Multispectral-Classification/"
     }
 
     if mode not in dataset_path:
@@ -236,11 +239,13 @@ def collections():
     seg_datasets = _merged_datasets(user_slug, "segmentation", "Seg")
     od_datasets  = _merged_datasets(user_slug, "detection", "OD")
     cls_datasets = _merged_datasets(user_slug, "classification", "Cls")
+    ms_cls_datasets = _merged_datasets(user_slug, "multispectral_classification", "MsCls")
 
     datasets = {
         "segmentation"  : seg_datasets,
         "detection"     : od_datasets,
-        "classification": cls_datasets
+        "classification": cls_datasets,
+        "multispectral_classification": ms_cls_datasets
     }
 
     # Page settings
@@ -312,7 +317,7 @@ def dataset_submit():
     mode = request.form.get('mode')
 
     num_classes = None
-    if mode == "classification":
+    if mode in ("classification", "multispectral_classification"):
         try:
             num_classes = int(request.form.get('num_classes'))
         except (TypeError, ValueError):
@@ -332,7 +337,10 @@ def dataset_submit():
         flash(error_msg, "danger")
         return redirect(url_for("collections", mode=mode, msg=error_msg, msg_type="danger"))
 
-    success, msg, final_path = process_dataset(mode, zip_path, num_classes, user_slug=user_slug)
+    success, msg, final_path = process_dataset(
+        mode, zip_path, num_classes, user_slug=user_slug,
+        num_channels=request.form.get("num_channels"),
+    )
 
     if not success:
         return redirect(url_for("collections", mode=mode, msg=msg, msg_type="danger"))
@@ -357,7 +365,8 @@ def train_model():
     models = {
         "segmentation"  : seg_models,
         "detection"     : od_models,
-        "classification": cls_models
+        "classification": cls_models,
+        "multispectral_classification": cls_models
     }
 
     # Collections
@@ -367,11 +376,13 @@ def train_model():
     od_collections  = _merged_datasets(user_slug, "detection", "OD")
     seg_collections = _merged_datasets(user_slug, "segmentation", "Seg")
     cls_collections = _merged_datasets(user_slug, "classification", "Cls")
+    ms_cls_collections = _merged_datasets(user_slug, "multispectral_classification", "MsCls")
 
     collections = {
         "segmentation"  : seg_collections,
         "detection"     : od_collections,
-        "classification": cls_collections
+        "classification": cls_collections,
+        "multispectral_classification": ms_cls_collections
     }
 
     # Advanced
@@ -471,6 +482,8 @@ def train_model():
         }
     }
 
+    augmentations["multispectral_classification"] = augmentations["classification"]
+
     # Page settings
     mode = request.args.get("mode")
 
@@ -497,19 +510,23 @@ def models():
     seg_csv = os.path.join(user_root(user_slug), "models_db", "trained_models_db_segm.csv")
     od_csv  = os.path.join(user_root(user_slug), "models_db", "trained_models_db_od.csv")
     cls_csv = os.path.join(user_root(user_slug), "models_db", "trained_models_db_cls.csv")
+    ms_cls_csv = os.path.join(user_root(user_slug), "models_db", "trained_models_db_ms_cls.csv")
     if HESTIA_ENABLED:
         seg_models = _hestia_models_for_template(user_slug, "segmentation", seg_csv)
         od_models  = _hestia_models_for_template(user_slug, "detection", od_csv)
         cls_models = _hestia_models_for_template(user_slug, "classification", cls_csv)
+        ms_cls_models = _hestia_models_for_template(user_slug, "multispectral_classification", ms_cls_csv)
     else:
         seg_models = load_models(seg_csv)
         od_models  = load_models(od_csv)
         cls_models = load_models(cls_csv)
+        ms_cls_models = load_models(ms_cls_csv)
 
     models = {
         "segmentation"  : seg_models,
         "detection"     : od_models,
-        "classification": cls_models
+        "classification": cls_models,
+        "multispectral_classification": ms_cls_models
     }
 
     # Page settings
@@ -592,16 +609,41 @@ def train_model_submit():
 
     # Classification command
     cls_split_flag = False
-    if mode == "classification" and selected_collection:
-        dataset_root = os.path.join(user_root(user_slug), "Datasets", "Classification", selected_collection)
+    in_channels = None
+    if mode in ("classification", "multispectral_classification") and selected_collection:
+        dataset_dir = HESTIA_DATASET_DIR[mode]
+        dataset_root = os.path.join(user_root(user_slug), "Datasets", dataset_dir, selected_collection)
         train_dir = os.path.join(dataset_root, "train")
         val_dir = os.path.join(dataset_root, "val")
         cls_split_flag = os.path.isdir(train_dir) and os.path.isdir(val_dir)
+        if mode == "multispectral_classification":
+            if HESTIA_ENABLED:
+                hc.ensure_dataset_local(user_slug, mode, selected_collection,
+                                        os.path.dirname(dataset_root))
+            metadata_path = os.path.join(dataset_root, "multispectral_metadata.json")
+            try:
+                with open(metadata_path, "r", encoding="utf-8") as handle:
+                    in_channels = int(json.load(handle)["num_channels"])
+            except (OSError, ValueError, KeyError):
+                return jsonify({"error": "Invalid multispectral dataset metadata"}), 400
 
     cls_cmd = [
         "python", "training_button_classification.py",
         "--user", user_slug,
     ] + base_args + [
+        "--blur", bool_str(blur_enabled),
+        "--rotate", bool_str(rotate_enabled),
+        "--flip", bool_str(flip_enabled),
+        "--scale", bool_str(scale_enabled),
+        "--dataset_already_split", bool_str(cls_split_flag),
+        "--transfer_learning", bool_str(transfer_learning),
+    ]
+
+    ms_cls_cmd = [
+        "python", "training_button_multispectral_classification.py",
+        "--user", user_slug,
+    ] + base_args + [
+        "--in_channels", str(in_channels),
         "--blur", bool_str(blur_enabled),
         "--rotate", bool_str(rotate_enabled),
         "--flip", bool_str(flip_enabled),
@@ -624,7 +666,8 @@ def train_model_submit():
     subprocesses = {
         "segmentation"  : seg_cmd,
         "detection"     : det_cmd,
-        "classification": cls_cmd
+        "classification": cls_cmd,
+        "multispectral_classification": ms_cls_cmd
     }
 
     paths = {
@@ -644,6 +687,12 @@ def train_model_submit():
             os.path.join(user_root(user_slug), "Classification", "runs", "user_experiments.csv"),
             os.path.join(user_root(user_slug), "models_db", "trained_models_db_cls.csv"),
             "Cls",
+            user_slug,
+        ],
+        "multispectral_classification": [
+            os.path.join(user_root(user_slug), "MultispectralClassification", "runs", "user_experiments.csv"),
+            os.path.join(user_root(user_slug), "models_db", "trained_models_db_ms_cls.csv"),
+            "MsCls",
             user_slug,
         ]
     }
@@ -673,6 +722,8 @@ def train_model_submit():
                 "epochs": {"left": epoch_left, "right": epoch_right},
                 "augmentations": augmentations,
             }
+            if in_channels is not None:
+                params_payload["in_channels"] = in_channels
             owner_email = get_current_user_email()
             experiment_id = hc.create_experiment(
                 user_slug, mode, dataset_id=dataset_id,
@@ -731,7 +782,7 @@ def active_train_jobs():
 def inference_results():
     raw_id = request.args.get("id")
     mode = request.args.get("mode", default="segmentation", type=str)
-    if mode not in ("segmentation", "detection", "classification"):
+    if mode not in ("segmentation", "detection", "classification", "multispectral_classification"):
         return "Invalid mode", 400
 
     user_slug = get_current_user_slug()
@@ -806,7 +857,7 @@ def inference():
     raw_id = request.args.get("id")
 
     mode = request.args.get("mode", default="segmentation", type=str)
-    if mode not in ("segmentation", "detection", "classification"):
+    if mode not in ("segmentation", "detection", "classification", "multispectral_classification"):
         return "Invalid mode", 400
 
     user_slug = get_current_user_slug()
@@ -1159,6 +1210,87 @@ def inference():
                         app.logger.warning(f"HESTIA inference persist failed: {e}")
 
                 success_msg = f"Inference for {len(files)} image(s) completed!"
+
+        if mode == "multispectral_classification":
+            if hestia_model:
+                cache_dir = os.path.join(user_root(user_slug), "MultispectralClassification",
+                                         "_hestia_cache", str(model_id))
+                checkpoint_path, config_path = hc.ensure_model_local(hestia_model, cache_dir)
+
+            files = [
+                uploaded for uploaded in request.files.getlist("file")
+                if uploaded.filename and os.path.splitext(uploaded.filename)[1].lower() in (".tif", ".tiff")
+            ]
+            if not files:
+                error_msg = "Upload one or more multiband TIFF files."
+            else:
+                timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+                save_dir = os.path.join(inference_root, "inputs", str(model_id), timestamp)
+                output_dir = os.path.join(inference_root, "outputs", str(model_id), timestamp)
+                os.makedirs(save_dir, exist_ok=True)
+                os.makedirs(output_dir, exist_ok=True)
+
+                filenames = []
+                for uploaded in files:
+                    filename = secure_filename(uploaded.filename)
+                    uploaded.save(os.path.join(save_dir, filename))
+                    filenames.append(filename)
+
+                container = client.containers.run(
+                    IMAGE_SEGM_CLS,
+                    command="sleep infinity",
+                    detach=True,
+                    volumes={BASE_HOST_PATH_OUT: {"bind": "/data", "mode": "rw"}},
+                )
+                try:
+                    for filename in filenames:
+                        execution = container.exec_run([
+                            "python", "/data/MultispectralClassification/inference.py",
+                            "--model_path", checkpoint_path,
+                            "--config", config_path,
+                            "--image", f"/data/{user_slug}/inference/multispectral_classification/inputs/{model_id}/{timestamp}/{filename}",
+                            "--output_dir", f"/data/{user_slug}/inference/multispectral_classification/outputs/{model_id}/{timestamp}/",
+                        ])
+                        if execution.exit_code != 0:
+                            error_msg = "One or more TIFF files do not match this model's spectral input."
+                    container.exec_run([
+                        "chown", "-R", chown_target(config),
+                        f"/data/{user_slug}/inference/multispectral_classification/outputs/",
+                    ])
+                finally:
+                    container.stop()
+                    container.remove()
+
+                for filename in filenames:
+                    output_path = os.path.join(output_dir, f"{os.path.splitext(filename)[0]}.txt")
+                    if not os.path.isfile(output_path):
+                        continue
+                    with open(output_path, "r", encoding="utf-8") as handle:
+                        output_text = handle.read()
+                    results.append({
+                        "input_file": url_for(
+                            "user_inference_files",
+                            filename=f"multispectral_classification/inputs/{model_id}/{timestamp}/{filename}",
+                        ),
+                        "output_text": output_text,
+                        "filename": filename,
+                    })
+
+                if HESTIA_ENABLED and hestia_model and results:
+                    try:
+                        output_map = {
+                            os.path.basename(path): path
+                            for path in glob.glob(os.path.join(output_dir, "*.txt"))
+                        }
+                        _persist_inference_to_hestia(
+                            user_slug, "multispectral_classification", str(model_id),
+                            model_name, dataset_name, files, save_dir, output_map, None,
+                        )
+                    except Exception as exc:
+                        app.logger.warning("HESTIA inference persist failed: %s", exc)
+
+                if results:
+                    success_msg = f"Inference for {len(results)} TIFF file(s) completed!"
     
     if success_msg: 
         flash(success_msg, "info")
