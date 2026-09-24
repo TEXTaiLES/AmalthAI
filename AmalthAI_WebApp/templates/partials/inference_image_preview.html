@@ -1,0 +1,23 @@
+{% macro thumbnail(src, alt) %}
+<button type="button" class="inference-preview-trigger" data-bs-toggle="modal" data-bs-target="#inferenceImagePreview"
+        data-preview-src="{{ src }}" data-preview-alt="{{ alt }}" aria-label="Enlarge {{ alt }}">
+    <img src="{{ src }}" alt="{{ alt }}" class="img-thumbnail" style="max-height: 200px;">
+</button>
+{% endmacro %}
+
+{% macro dialog() %}
+<div class="modal fade" id="inferenceImagePreview" tabindex="-1" aria-labelledby="inferenceImagePreviewTitle" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="inferenceImagePreviewTitle">Image preview</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center">
+                <img class="inference-preview-image" alt="">
+            </div>
+        </div>
+    </div>
+</div>
+<script src="{{ url_for('static', filename='js/inference_image_preview.js') }}"></script>
+{% endmacro %}

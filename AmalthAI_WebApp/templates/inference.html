@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Inference - {{model.name}}{% endblock %}
+{% import "partials/inference_image_preview.html" as preview %}
 {% block content %}
 <div class="container-fluid py-4">
     <!-- Main body -->
@@ -119,10 +120,7 @@
                                 </td>
                                 <td>
                                     <div class="d-flex flex-column align-items-center gap-2">
-                                        <img src="{{ result.get('preview_file', result.get('input_file')) }}"
-                                            alt="{{ result.get('filename','image') }}"
-                                            class="img-thumbnail"
-                                            style="max-height:200px;">
+                                        {{ preview.thumbnail(result.get('preview_file', result.get('input_file')), result.get('filename', 'image')) }}
                                         {% if mode == "multispectral_classification" %}<div class="small text-muted">Band 1 (grayscale)</div>{% endif %}
                                         <a href="{{ result.get('input_file') }}" download class="btn btn-outline-primary btn-sm">Download {{ "TIFF" if mode == "multispectral_classification" else "Image" }}</a>
                                     </div>
@@ -131,10 +129,7 @@
                                 <td>
                                     {% if result.get('gradcam_file') %}
                                         <div class="d-flex flex-column align-items-center gap-2">
-                                            <img src="{{ result.get('gradcam_file') }}"
-                                                alt="Grad-CAM"
-                                                class="img-thumbnail"
-                                                style="max-height:200px;">
+                                            {{ preview.thumbnail(result.get('gradcam_file'), 'Grad-CAM') }}
                                             <a href="{{ result.get('gradcam_file') }}" download class="btn btn-outline-primary btn-sm">Download Grad-CAM</a>
                                         </div>
                                     {% else %}
@@ -211,7 +206,7 @@
                             <tr>
                                 <th>Name</th>
                                 <th>Image</th>
-                                <th>Mask</th>
+                                <th>{{ "Segmentation Map" if mode == "segmentation" else "Result" }}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -222,13 +217,13 @@
                                 </td>
                                 <td>
                                     <div class="d-flex flex-column align-items-center gap-2">
-                                        <img src="{{ result.get('input_image') }}" alt="image" class="img-thumbnail" style="max-height: 200px;">
+                                        {{ preview.thumbnail(result.get('input_image'), 'Image') }}
                                         <a href="{{ result.get('input_image') }}" download class="btn btn-outline-primary btn-sm">Download Image</a>
                                     </div>
                                 </td>
                                 <td>
                                     <div class="d-flex flex-column align-items-center gap-2">
-                                        <img src="{{ result.get('output_image') }}" alt="mask" class="img-thumbnail" style="max-height: 200px;">
+                                        {{ preview.thumbnail(result.get('output_image'), 'Segmentation map' if mode == 'segmentation' else 'Detection result') }}
                                         <a href="{{ result.get('output_image') }}" download class="btn btn-outline-primary btn-sm">Download Output</a>
                                     </div>
                                 </td>
@@ -254,5 +249,6 @@
     </div>
 </div>
 
+{{ preview.dialog() }}
 <script src="{{ url_for('static', filename='js/loader.js') }}"></script>
 {% endblock %}

@@ -212,3 +212,20 @@ th.sortable[aria-sort] {
     color: #c0392b;
     cursor: not-allowed;
 }
+.inference-preview-trigger {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: zoom-in;
+}
+
+.inference-preview-trigger:focus-visible {
+    outline: 3px solid var(--bs-primary);
+    outline-offset: 3px;
+}
+
+.inference-preview-image {
+    max-width: 100%;
+    max-height: calc(100vh - 12rem);
+    object-fit: contain;
+}
