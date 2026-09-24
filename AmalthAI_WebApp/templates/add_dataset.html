@@ -176,7 +176,7 @@
                     <div class="card-body">
                         <p class="small text-muted mb-0">
                             For more detailed information regarding dataset preparation and annotation, please refer to our 
-                            <a href="{% if mode in ['classification', 'multispectral_classification'] %}https://textailes.github.io/AmalthAI-documentation/manual/classification/{% elif mode == 'segmentation' %}https://textailes.github.io/AmalthAI-documentation/manual/semantic_segm/{% elif mode == 'detection' %}https://textailes.github.io/AmalthAI-documentation/manual/object_detection/{% endif %}" target="_blank" class="text-decoration-none">official documentation</a>.
+                            <a href="{% if mode == 'classification' %}https://textailes.github.io/AmalthAI-documentation/manual/classification/{% elif mode == 'multispectral_classification' %}https://textailes.github.io/AmalthAI-documentation/manual/multispectral_classification/{% elif mode == 'segmentation' %}https://textailes.github.io/AmalthAI-documentation/manual/semantic_segm/{% elif mode == 'detection' %}https://textailes.github.io/AmalthAI-documentation/manual/object_detection/{% endif %}" target="_blank" class="text-decoration-none">official documentation</a>.
                         </p>
                     </div>
                 </div>
