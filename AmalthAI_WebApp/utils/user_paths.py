@@ -63,3 +63,4 @@ def ensure_user_folders(slug):
     ensure_model_db_file(os.path.join(root, "models_db", "trained_models_db_segm.csv"))
     ensure_model_db_file(os.path.join(root, "models_db", "trained_models_db_od.csv"))
     ensure_model_db_file(os.path.join(root, "models_db", "trained_models_db_cls.csv"))
+    ensure_model_db_file(os.path.join(root, "models_db", "trained_models_db_ms_cls.csv"))
