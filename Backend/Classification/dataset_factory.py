@@ -73,16 +73,17 @@ class DatasetFactory:
                 total_size = len(full_dataset)
                 val_size = int(total_size * self.val_split)
                 train_size = total_size - val_size
+                split_seed = torch.Generator().seed()
                 
                 trainset, _ = random_split(
                     full_dataset, 
                     [train_size, val_size], 
-                    generator=torch.Generator().manual_seed(42)
+                    generator=torch.Generator().manual_seed(split_seed)
                 )
                 _, valset = random_split(
                     val_dataset, 
                     [train_size, val_size], 
-                    generator=torch.Generator().manual_seed(42)
+                    generator=torch.Generator().manual_seed(split_seed)
                 )
                 classes = full_dataset.classes
         else:
@@ -93,4 +94,3 @@ class DatasetFactory:
 
         num_classes = len(classes)
         return train_loader, val_loader, num_classes, classes
-
